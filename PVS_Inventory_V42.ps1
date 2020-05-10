@@ -239,9 +239,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: PVS_Inventory_V42.ps1
-	VERSION: 4.23
+	VERSION: 4.24
 	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith, Jeff Wouters and Iain Brighton)
-	LASTEDIT: October 5, 2015
+	LASTEDIT: December 4, 2015
 #>
 
 
@@ -342,8 +342,13 @@ Param(
 #
 #Version 4.22
 #	Fixed processing of the Options tab for ServerBootstrap files
+#
 #Version 4.23 5-Oct-2015
 #	Added support for Word 2016
+#
+#Version 4.24 4-Dec-2015
+#	Added RAM usage for Cache to Device RAM with Overflow to Disk option
+
 
 Set-StrictMode -Version 2
 
@@ -4613,7 +4618,10 @@ ForEach($PVSSite in $PVSSites)
 						4   {WriteWordLine 0 0 "Cache on device's hard disk"}
 						6   {WriteWordLine 0 0 "RAM Disk"}
 						7   {WriteWordLine 0 0 "Difference Disk"}
-						9   {WriteWordLine 0 0 "Cache in device RAM with overflow on hard disk"}
+						9   {
+							WriteWordLine 0 0 "Cache in device RAM with overflow on hard disk"
+							WriteWordLine 0 3 "Maximum RAM Size: $($Disk.writeCacheSize) MBs"
+							}
 						Default {WriteWordLine 0 0 "Cache type could not be determined: $($Disk.writeCacheType)"}
 					}
 				}
