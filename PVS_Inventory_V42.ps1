@@ -23,17 +23,25 @@
 
 .PARAMETER CompanyName
 	Company Name to use for the Cover Page.  
-	Default value is contained in HKCU:\Software\Microsoft\Office\Common\UserInfo\Company
+	Default value is contained in HKCU:\Software\Microsoft\Office\Common\UserInfo\CompanyName or
+	HKCU:\Software\Microsoft\Office\Common\UserInfo\Company, whichever is populated on the 
+	computer running the script.
 	This parameter has an alias of CN.
+	If either registry key does not exist and this parameter is not specified, the report will
+	not contain a Company Name on the cover page.
+	This parameter is only valid with the MSWORD and PDF output parameters.
 .PARAMETER CoverPage
 	What Microsoft Word Cover Page to use.
 	Only Word 2010 and 2013 are supported.
 	(default cover pages in Word en-US)
+	
 	Valid input is:
 		Alphabet (Word 2010. Works)
 		Annual (Word 2010. Doesn't work well for this report)
 		Austere (Word 2010. Works)
-		Austin (Word 2010/2013. Doesn't work in 2013, mostly works in 2010 but Subtitle/Subject & Author fields need to me moved after title box is moved up)
+		Austin (Word 2010/2013. Doesn't work in 2013, mostly works in 2010 but 
+						Subtitle/Subject & Author fields need to be moved 
+						after title box is moved up)
 		Banded (Word 2013. Works)
 		Conservative (Word 2010. Works)
 		Contrast (Word 2010. Works)
@@ -43,14 +51,17 @@
 		Filigree (Word 2013. Works)
 		Grid (Word 2010/2013.Works in 2010)
 		Integral (Word 2013. Works)
-		Ion (Dark) (Word 2013. Top date doesn't fit, box needs to be manually resized or font changed to 8 point)
-		Ion (Light) (Word 2013. Top date doesn't fit, box needs to be manually resized or font changed to 8 point)
+		Ion (Dark) (Word 2013. Top date doesn't fit, box needs to be manually resized or font 
+						changed to 8 point)
+		Ion (Light) (Word 2013. Top date doesn't fit, box needs to be manually resized or font 
+						changed to 8 point)
 		Mod (Word 2010. Works)
 		Motion (Word 2010/2013. Works if top date is manually changed to 36 point)
 		Newsprint (Word 2010. Works but date is not populated)
 		Perspective (Word 2010. Works)
 		Pinstripes (Word 2010. Works)
-		Puzzle (Word 2010. Top date doesn't fit, box needs to be manually resized or font changed to 14 point)
+		Puzzle (Word 2010. Top date doesn't fit, box needs to be manually resized or font 
+					changed to 14 point)
 		Retrospect (Word 2013. Works)
 		Semaphore (Word 2013. Works)
 		Sideline (Word 2010/2013. Doesn't work in 2013, works in 2010)
@@ -61,16 +72,21 @@
 		Transcend (Word 2010. Works)
 		ViewMaster (Word 2013. Works)
 		Whisp (Word 2013. Works)
+		
 	Default value is Sideline.
 	This parameter has an alias of CP.
+	This parameter is only valid with the MSWORD and PDF output parameters.
 .PARAMETER UserName
 	User name to use for the Cover Page and Footer.
 	Default value is contained in $env:username
 	This parameter has an alias of UN.
+	This parameter is only valid with the MSWORD and PDF output parameters.
 .PARAMETER PDF
 	SaveAs PDF file instead of DOCX file.
 	This parameter is disabled by default.
 	The PDF file is roughly 5X to 10X larger than the DOCX file.
+	This parameter requires Microsoft Word to be installed.
+	This parameter uses the Word SaveAs PDF capability.
 .PARAMETER Text
 	Creates a formatted text file with a .txt extension.
 	This parameter is disabled by default.
@@ -223,9 +239,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: PVS_Inventory_V42.ps1
-	VERSION: 4.2
+	VERSION: 4.21
 	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith, Jeff Wouters and Iain Brighton)
-	LASTEDIT: August 4, 2014
+	LASTEDIT: July 8, 2015
 #>
 
 
@@ -297,6 +313,7 @@ Param(
 #This script written for "Benji", March 19, 2012
 #Thanks to Michael B. Smith, Joe Shonk and Stephane Thirion
 #for testing and fine-tuning tips 
+
 #Version 4.2
 #	Cleanup the script's parameters section
 #	Code cleanup and standardization with the master template script
@@ -316,6 +333,12 @@ Param(
 #	Move hardware info to new table functions
 #	Move audit trail info to new table functions
 #	Add parameters for MSWord, Text and HTML for future updates
+#
+#Version 4.21
+#	Add writeCacheType 9 (Cache to Device RAM with overflow to hard disk) for PVS 7.x
+#	Remove writeCacheType 3 and 5 from PVS 6 and 7
+#	Updated help text
+#	Updated hardware inventory code
 
 Set-StrictMode -Version 2
 
@@ -515,6 +538,7 @@ If($MSWord -or $PDF)
 	[string]$RunningOS = (Get-WmiObject -class Win32_OperatingSystem -EA 0).Caption
 }
 
+#region code for -hardware switch
 Function GetComputerWMIInfo
 {
 	Param([string]$RemoteComputerName)
@@ -531,16 +555,17 @@ Function GetComputerWMIInfo
 	Write-Verbose "$(Get-Date): `t`t`tHardware information"
 	If($MSWord -or $PDF)
 	{
-		WriteWordLine 3 0 "Computer Information"
-		WriteWordLine 0 1 "General Computer"
+		WriteWordLine 3 0 "Computer Information: $($RemoteComputerName)"
+		WriteWordLine 4 0 "General Computer"
 	}
 	ElseIf($Text)
 	{
-		Line 0 "Computer Information"
+		Line 0 "Computer Information: $($RemoteComputerName)"
 		Line 1 "General Computer"
 	}
 	ElseIf($HTML)
 	{
+		WriteHTMLLine 3 0 "Computer Information: $($RemoteComputerName)"
 	}
 	
 	[bool]$GotComputerItems = $True
@@ -557,7 +582,9 @@ Function GetComputerWMIInfo
 	
 	If($? -and $Results -ne $Null)
 	{
-		$ComputerItems = $Results | Select Manufacturer, Model, Domain, @{N="TotalPhysicalRam"; E={[math]::round(($_.TotalPhysicalMemory / 1GB),0)}}
+		$ComputerItems = $Results | Select Manufacturer, Model, Domain, `
+		@{N="TotalPhysicalRam"; E={[math]::round(($_.TotalPhysicalMemory / 1GB),0)}}, `
+		NumberOfProcessors, NumberOfLogicalProcessors
 		$Results = $Null
 
 		ForEach($Item in $ComputerItems)
@@ -586,21 +613,26 @@ Function GetComputerWMIInfo
 		}
 		ElseIf($HTML)
 		{
+			WriteHTMLLine 0 2 "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)" "" $Null 0 $False $True
+			WriteHTMLLine 0 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository" "" $Null 0 $False $True
+			WriteHTMLLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
+			WriteHTMLLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
 		}
 	}
 	Else
 	{
-		Write-Verbose "$(Get-Date): No results returned for Computer information"
+		Write-Verbose "$(Get-Date): No results Returned for Computer information"
 		If($MSWORD -or $PDF)
 		{
-			WriteWordLine 0 2 "No results returned for Computer information" "" $Null 0 $False $True
+			WriteWordLine 0 2 "No results Returned for Computer information" "" $Null 0 $False $True
 		}
 		ElseIf($Text)
 		{
-			Line 2 "No results returned for Computer information"
+			Line 2 "No results Returned for Computer information"
 		}
 		ElseIf($HTML)
 		{
+			WriteHTMLLine 0 2 "No results Returned for Computer information" "" $Null 0 $False $True
 		}
 	}
 	
@@ -609,7 +641,7 @@ Function GetComputerWMIInfo
 
 	If($MSWord -or $PDF)
 	{
-		WriteWordLine 0 1 "Drive(s)"
+		WriteWordLine 4 0 "Drive(s)"
 	}
 	ElseIf($Text)
 	{
@@ -617,6 +649,7 @@ Function GetComputerWMIInfo
 	}
 	ElseIf($HTML)
 	{
+		WriteHTMLLine 2 0 "Drive(s)"
 	}
 
 	[bool]$GotDrives = $True
@@ -665,21 +698,26 @@ Function GetComputerWMIInfo
 		}
 		ElseIf($HTML)
 		{
+			WriteHTMLLine 0 2 "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)" "" $Null 0 $False $True
+			WriteHTMLLine 0 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository" "" $Null 0 $False $True
+			WriteHTMLLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
+			WriteHTMLLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
 		}
 	}
 	Else
 	{
-		Write-Verbose "$(Get-Date): No results returned for Drive information"
+		Write-Verbose "$(Get-Date): No results Returned for Drive information"
 		If($MSWORD -or $PDF)
 		{
-			WriteWordLine 0 2 "No results returned for Drive information" "" $Null 0 $False $True
+			WriteWordLine 0 2 "No results Returned for Drive information" "" $Null 0 $False $True
 		}
 		ElseIf($Text)
 		{
-			Line 2 "No results returned for Drive information"
+			Line 2 "No results Returned for Drive information"
 		}
 		ElseIf($HTML)
 		{
+			WriteHTMLLine 0 2 "No results Returned for Drive information" "" $Null 0 $False $True
 		}
 	}
 	
@@ -689,7 +727,7 @@ Function GetComputerWMIInfo
 
 	If($MSWord -or $PDF)
 	{
-		WriteWordLine 0 1 "Processor(s)"
+		WriteWordLine 4 0 "Processor(s)"
 	}
 	ElseIf($Text)
 	{
@@ -741,21 +779,26 @@ Function GetComputerWMIInfo
 		}
 		ElseIf($HTML)
 		{
+			WriteHTMLLine 0 2 "Get-WmiObject win32_Processor failed for $($RemoteComputerName)" "" $Null 0 $False $True
+			WriteHTMLLine 0 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository" "" $Null 0 $False $True
+			WriteHTMLLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
+			WriteHTMLLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
 		}
 	}
 	Else
 	{
-		Write-Verbose "$(Get-Date): No results returned for Processor information"
+		Write-Verbose "$(Get-Date): No results Returned for Processor information"
 		If($MSWORD -or $PDF)
 		{
-			WriteWordLine 0 2 "No results returned for Processor information" "" $Null 0 $False $True
+			WriteWordLine 0 2 "No results Returned for Processor information" "" $Null 0 $False $True
 		}
 		ElseIf($Text)
 		{
-			Line 2 "No results returned for Processor information"
+			Line 2 "No results Returned for Processor information"
 		}
 		ElseIf($HTML)
 		{
+			WriteHTMLLine 0 2 "No results Returned for Processor information" "" $Null 0 $False $True
 		}
 	}
 
@@ -764,7 +807,7 @@ Function GetComputerWMIInfo
 
 	If($MSWord -or $PDF)
 	{
-		WriteWordLine 0 1 "Network Interface(s)"
+		WriteWordLine 4 0 "Network Interface(s)"
 	}
 	ElseIf($Text)
 	{
@@ -841,21 +884,27 @@ Function GetComputerWMIInfo
 					}
 					ElseIf($HTML)
 					{
+						WriteHTMLLine 0 2 "Error retrieving NIC information" "" $Null 0 $False $True
+						WriteHTMLLine 0 2 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)" "" $Null 0 $False $True
+						WriteHTMLLine 0 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository" "" $Null 0 $False $True
+						WriteHTMLLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
+						WriteHTMLLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
 					}
 				}
 				Else
 				{
-					Write-Verbose "$(Get-Date): No results returned for NIC information"
+					Write-Verbose "$(Get-Date): No results Returned for NIC information"
 					If($MSWORD -or $PDF)
 					{
-						WriteWordLine 0 2 "No results returned for NIC information" "" $Null 0 $False $True
+						WriteWordLine 0 2 "No results Returned for NIC information" "" $Null 0 $False $True
 					}
 					ElseIf($Text)
 					{
-						Line 2 "No results returned for NIC information"
+						Line 2 "No results Returned for NIC information"
 					}
 					ElseIf($HTML)
 					{
+						WriteHTMLLine 0 2 "No results Returned for NIC information" "" $Null 0 $False $True
 					}
 				}
 			}
@@ -884,21 +933,27 @@ Function GetComputerWMIInfo
 		}
 		ElseIf($HTML)
 		{
+			WriteHTMLLine 0 2 "Error retrieving NIC configuration information" "" $Null 0 $False $True
+			WriteHTMLLine 0 2 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)" "" $Null 0 $False $True
+			WriteHTMLLine 0 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository" "" $Null 0 $False $True
+			WriteHTMLLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
+			WriteHTMLLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
 		}
 	}
 	Else
 	{
-		Write-Verbose "$(Get-Date): No results returned for NIC configuration information"
+		Write-Verbose "$(Get-Date): No results Returned for NIC configuration information"
 		If($MSWORD -or $PDF)
 		{
-			WriteWordLine 0 2 "No results returned for NIC configuration information" "" $Null 0 $False $True
+			WriteWordLine 0 2 "No results Returned for NIC configuration information" "" $Null 0 $False $True
 		}
 		ElseIf($Text)
 		{
-			Line 2 "No results returned for NIC configuration information"
+			Line 2 "No results Returned for NIC configuration information"
 		}
 		ElseIf($HTML)
 		{
+			WriteHTMLLine 0 2 "No results Returned for NIC configuration information" "" $Null 0 $False $True
 		}
 	}
 	
@@ -912,6 +967,7 @@ Function GetComputerWMIInfo
 	}
 	ElseIf($HTML)
 	{
+		WriteHTMLLine 0 0 ""
 	}
 
 	$Results = $Null
@@ -931,21 +987,25 @@ Function OutputComputerItem
 		$ItemInformation += @{ Data = "Model"; Value = $Item.model; }
 		$ItemInformation += @{ Data = "Domain"; Value = $Item.domain; }
 		$ItemInformation += @{ Data = "Total Ram"; Value = "$($Item.totalphysicalram) GB"; }
-		$Table = AddWordTable -Hashtable $ItemInformation -Columns Data,Value -List -AutoFit $wdAutoFitFixed;
+		$ItemInformation += @{ Data = "Physical Processors (sockets)"; Value = $Item.NumberOfProcessors; }
+		$ItemInformation += @{ Data = "Logical Processors (cores w/HT)"; Value = $Item.NumberOfLogicalProcessors; }
+		$Table = AddWordTable -Hashtable $ItemInformation `
+		-Columns Data,Value `
+		-List `
+		-AutoFit $wdAutoFitFixed;
 
 		## Set first column format
 		SetWordCellFormat -Collection $Table.Columns.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
 
 		## IB - set column widths without recursion
-		$Table.Columns.Item(1).Width = 125;
-		$Table.Columns.Item(2).Width = 100;
+		$Table.Columns.Item(1).Width = 150;
+		$Table.Columns.Item(2).Width = 200;
 
-		$Table.Rows.SetLeftIndent($Indent2TabStops,$wdAdjustNone)
+		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
 
 		FindWordDocumentEnd
 		$Table = $Null
 		WriteWordLine 0 2 ""
-		
 	}
 	ElseIf($Text)
 	{
@@ -953,16 +1013,57 @@ Function OutputComputerItem
 		Line 2 "Model`t`t: " $Item.model
 		Line 2 "Domain`t`t: " $Item.domain
 		Line 2 "Total Ram`t: $($Item.totalphysicalram) GB"
+		Line 2 "Physical Processors (sockets): " $Item.NumberOfProcessors
+		Line 2 "Logical Processors (cores w/HT): " $Item.NumberOfLogicalProcessors
 		Line 2 ""
 	}
 	ElseIf($HTML)
 	{
+		$rowdata = @()
+		$columnHeaders = @("Manufacturer",($htmlsilver -bor $htmlbold),$Item.manufacturer,$htmlwhite)
+		$rowdata += @(,('Model',($htmlsilver -bor $htmlbold),$Item.model,$htmlwhite))
+		$rowdata += @(,('Domain',($htmlsilver -bor $htmlbold),$Item.domain,$htmlwhite))
+		$rowdata += @(,('Total Ram',($htmlsilver -bor $htmlbold),"$($Item.totalphysicalram) GB",$htmlwhite))
+		$rowdata += @(,('Physical Processors (sockets)',($htmlsilver -bor $htmlbold),$Item.NumberOfProcessors,$htmlwhite))
+		$rowdata += @(,('Logical Processors (cores w/HT)',($htmlsilver -bor $htmlbold),$Item.NumberOfLogicalProcessors,$htmlwhite))
+
+		$msg = "General Computer"
+		$columnWidths = @("150px","200px")
+		FormatHTMLTable $msg -rowarray $rowdata -columnArray $columnheaders -fixedWidth $columnWidths
+		WriteHTMLLine 0 0 ""
 	}
 }
 
 Function OutputDriveItem
 {
 	Param([object]$Drive)
+	
+	$xDriveType = ""
+	Switch ($drive.drivetype)
+	{
+		0	{$xDriveType = "Unknown"}
+		1	{$xDriveType = "No Root Directory"}
+		2	{$xDriveType = "Removable Disk"}
+		3	{$xDriveType = "Local Disk"}
+		4	{$xDriveType = "Network Drive"}
+		5	{$xDriveType = "Compact Disc"}
+		6	{$xDriveType = "RAM Disk"}
+		Default {$xDriveType = "Unknown"}
+	}
+	
+	$xVolumeDirty = ""
+	If(![String]::IsNullOrEmpty($drive.volumedirty))
+	{
+		If($drive.volumedirty)
+		{
+			$xVolumeDirty = "Yes"
+		}
+		Else
+		{
+			$xVolumeDirty = "No"
+		}
+	}
+
 	If($MSWORD -or $PDF)
 	{
 		[System.Collections.Hashtable[]] $DriveInformation = @()
@@ -979,42 +1080,28 @@ Function OutputDriveItem
 		}
 		If(![String]::IsNullOrEmpty($drive.volumedirty))
 		{
-			If($drive.volumedirty)
-			{
-				$tmp = "Yes"
-			}
-			Else
-			{
-				$tmp = "No"
-			}
-			$DriveInformation += @{ Data = "Volume is Dirty"; Value = $tmp; }
+			$DriveInformation += @{ Data = "Volume is Dirty"; Value = $xVolumeDirty; }
 		}
 		If(![String]::IsNullOrEmpty($drive.volumeserialnumber))
 		{
 			$DriveInformation += @{ Data = "Volume Serial Number"; Value = $Drive.volumeserialnumber; }
 		}
-		Switch ($drive.drivetype)
-		{
-			0	{$tmp = "Unknown"}
-			1	{$tmp = "No Root Directory"}
-			2	{$tmp = "Removable Disk"}
-			3	{$tmp = "Local Disk"}
-			4	{$tmp = "Network Drive"}
-			5	{$tmp = "Compact Disc"}
-			6	{$tmp = "RAM Disk"}
-			Default {$tmp = "Unknown"}
-		}
-		$DriveInformation += @{ Data = "Drive Type"; Value = $tmp; }
-		$Table = AddWordTable -Hashtable $DriveInformation -Columns Data,Value -List -AutoFit $wdAutoFitContent;
+		$DriveInformation += @{ Data = "Drive Type"; Value = $xDriveType; }
+		$Table = AddWordTable -Hashtable $DriveInformation `
+		-Columns Data,Value `
+		-List `
+		-AutoFit $wdAutoFitFixed;
 
 		## Set first column format
-		SetWordCellFormat -Collection $Table.Columns.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+		SetWordCellFormat -Collection $Table.Columns.Item(1).Cells `
+		-Bold `
+		-BackgroundColor $wdColorGray15;
 
 		## IB - set column widths without recursion
-		$Table.Columns.Item(1).Width = 125;
-		$Table.Columns.Item(2).Width = 100;
+		$Table.Columns.Item(1).Width = 150;
+		$Table.Columns.Item(2).Width = 200;
 
-		$Table.Rows.SetLeftIndent($Indent2TabStops,$wdAdjustNone)
+		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
 
 		FindWordDocumentEnd
 		$Table = $Null
@@ -1035,42 +1122,74 @@ Function OutputDriveItem
 		}
 		If(![String]::IsNullOrEmpty($drive.volumedirty))
 		{
-			Line 2 "Volume is Dirty`t: " -nonewline
-			If($drive.volumedirty)
-			{
-				Line 0 "Yes"
-			}
-			Else
-			{
-				Line 0 "No"
-			}
+			Line 2 "Volume is Dirty`t: " $xVolumeDirty
 		}
 		If(![String]::IsNullOrEmpty($drive.volumeserialnumber))
 		{
 			Line 2 "Volume Serial #`t: " $drive.volumeserialnumber
 		}
-		Line 2 "Drive Type`t: " -nonewline
-		Switch ($drive.drivetype)
-		{
-			0	{Line 0 "Unknown"}
-			1	{Line 0 "No Root Directory"}
-			2	{Line 0 "Removable Disk"}
-			3	{Line 0 "Local Disk"}
-			4	{Line 0 "Network Drive"}
-			5	{Line 0 "Compact Disc"}
-			6	{Line 0 "RAM Disk"}
-			Default {Line 0 "Unknown"}
-		}
+		Line 2 "Drive Type`t: " $xDriveType
 		Line 2 ""
 	}
 	ElseIf($HTML)
 	{
+		$rowdata = @()
+		$columnHeaders = @("Caption",($htmlsilver -bor $htmlbold),$Drive.caption,$htmlwhite)
+		$rowdata += @(,('Size',($htmlsilver -bor $htmlbold),"$($drive.drivesize) GB",$htmlwhite))
+
+		If(![String]::IsNullOrEmpty($drive.filesystem))
+		{
+			$rowdata += @(,('File System',($htmlsilver -bor $htmlbold),$Drive.filesystem,$htmlwhite))
+		}
+		$rowdata += @(,('Free Space',($htmlsilver -bor $htmlbold),"$($drive.drivefreespace) GB",$htmlwhite))
+		If(![String]::IsNullOrEmpty($drive.volumename))
+		{
+			$rowdata += @(,('Volume Name',($htmlsilver -bor $htmlbold),$Drive.volumename,$htmlwhite))
+		}
+		If(![String]::IsNullOrEmpty($drive.volumedirty))
+		{
+			$rowdata += @(,('Volume is Dirty',($htmlsilver -bor $htmlbold),$xVolumeDirty,$htmlwhite))
+		}
+		If(![String]::IsNullOrEmpty($drive.volumeserialnumber))
+		{
+			$rowdata += @(,('Volume Serial Number',($htmlsilver -bor $htmlbold),$Drive.volumeserialnumber,$htmlwhite))
+		}
+		$rowdata += @(,('Drive Type',($htmlsilver -bor $htmlbold),$xDriveType,$htmlwhite))
+
+		$msg = ""
+		$columnWidths = @("150px","200px")
+		FormatHTMLTable $msg -rowarray $rowdata -columnArray $columnheaders -fixedWidth $columnWidths
+		WriteHTMLLine 0 0 ""
 	}
 }
 
 Function OutputProcessorItem
 {
 	Param([object]$Processor)
+	
+	$xAvailability = ""
+	Switch ($processor.availability)
+	{
+		1	{$xAvailability = "Other"}
+		2	{$xAvailability = "Unknown"}
+		3	{$xAvailability = "Running or Full Power"}
+		4	{$xAvailability = "Warning"}
+		5	{$xAvailability = "In Test"}
+		6	{$xAvailability = "Not Applicable"}
+		7	{$xAvailability = "Power Off"}
+		8	{$xAvailability = "Off Line"}
+		9	{$xAvailability = "Off Duty"}
+		10	{$xAvailability = "Degraded"}
+		11	{$xAvailability = "Not Installed"}
+		12	{$xAvailability = "Install Error"}
+		13	{$xAvailability = "Power Save - Unknown"}
+		14	{$xAvailability = "Power Save - Low Power Mode"}
+		15	{$xAvailability = "Power Save - Standby"}
+		16	{$xAvailability = "Power Cycle"}
+		17	{$xAvailability = "Power Save - Warning"}
+		Default	{$xAvailability = "Unknown"}
+	}
+
 	If($MSWORD -or $PDF)
 	{
 		[System.Collections.Hashtable[]] $ProcessorInformation = @()
@@ -1091,31 +1210,13 @@ Function OutputProcessorItem
 		}
 		If($processor.numberoflogicalprocessors -gt 0)
 		{
-			$ProcessorInformation += @{ Data = "Number of Logical Processors"; Value = $Processor.numberoflogicalprocessors; }
+			$ProcessorInformation += @{ Data = "Number of Logical Processors (cores w/HT)"; Value = $Processor.numberoflogicalprocessors; }
 		}
-		Switch ($processor.availability)
-		{
-			1	{$tmp = "Other"}
-			2	{$tmp = "Unknown"}
-			3	{$tmp = "Running or Full Power"}
-			4	{$tmp = "Warning"}
-			5	{$tmp = "In Test"}
-			6	{$tmp = "Not Applicable"}
-			7	{$tmp = "Power Off"}
-			8	{$tmp = "Off Line"}
-			9	{$tmp = "Off Duty"}
-			10	{$tmp = "Degraded"}
-			11	{$tmp = "Not Installed"}
-			12	{$tmp = "Install Error"}
-			13	{$tmp = "Power Save - Unknown"}
-			14	{$tmp = "Power Save - Low Power Mode"}
-			15	{$tmp = "Power Save - Standby"}
-			16	{$tmp = "Power Cycle"}
-			17	{$tmp = "Power Save - Warning"}
-			Default	{$tmp = "Unknown"}
-		}
-		$ProcessorInformation += @{ Data = "Availability"; Value = $tmp; }
-		$Table = AddWordTable -Hashtable $ProcessorInformation -Columns Data,Value -List -AutoFit $wdAutoFitFixed;
+		$ProcessorInformation += @{ Data = "Availability"; Value = $xAvailability; }
+		$Table = AddWordTable -Hashtable $ProcessorInformation `
+		-Columns Data,Value `
+		-List `
+		-AutoFit $wdAutoFitFixed;
 
 		## Set first column format
 		SetWordCellFormat -Collection $Table.Columns.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
@@ -1124,11 +1225,11 @@ Function OutputProcessorItem
 		$Table.Columns.Item(1).Width = 150;
 		$Table.Columns.Item(2).Width = 200;
 
-		$Table.Rows.SetLeftIndent($Indent2TabStops,$wdAdjustNone)
+		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
 
 		FindWordDocumentEnd
 		$Table = $Null
-		WriteWordLine 0 2 ""
+		WriteWordLine 0 0 ""
 	}
 	ElseIf($Text)
 	{
@@ -1149,80 +1250,165 @@ Function OutputProcessorItem
 		}
 		If($processor.numberoflogicalprocessors -gt 0)
 		{
-			Line 2 "# of Logical Procs`t: " $processor.numberoflogicalprocessors
+			Line 2 "# of Logical Procs (cores w/HT)`t: " $processor.numberoflogicalprocessors
 		}
-		Line 2 "Availability`t`t: " -nonewline
-		Switch ($processor.availability)
-		{
-			1	{Line 0 "Other"}
-			2	{Line 0 "Unknown"}
-			3	{Line 0 "Running or Full Power"}
-			4	{Line 0 "Warning"}
-			5	{Line 0 "In Test"}
-			6	{Line 0 "Not Applicable"}
-			7	{Line 0 "Power Off"}
-			8	{Line 0 "Off Line"}
-			9	{Line 0 "Off Duty"}
-			10	{Line 0 "Degraded"}
-			11	{Line 0 "Not Installed"}
-			12	{Line 0 "Install Error"}
-			13	{Line 0 "Power Save - Unknown"}
-			14	{Line 0 "Power Save - Low Power Mode"}
-			15	{Line 0 "Power Save - Standby"}
-			16	{Line 0 "Power Cycle"}
-			17	{Line 0 "Power Save - Warning"}
-			Default	{Line 0 "Unknown"}
-		}
+		Line 2 "Availability`t`t: " $xAvailability
 		Line 2 ""
 	}
 	ElseIf($HTML)
 	{
+		$rowdata = @()
+		$columnHeaders = @("Name",($htmlsilver -bor $htmlbold),$Processor.name,$htmlwhite)
+		$rowdata += @(,('Description',($htmlsilver -bor $htmlbold),$Processor.description,$htmlwhite))
+
+		$rowdata += @(,('Max Clock Speed',($htmlsilver -bor $htmlbold),"$($processor.maxclockspeed) MHz",$htmlwhite))
+		If($processor.l2cachesize -gt 0)
+		{
+			$rowdata += @(,('L2 Cache Size',($htmlsilver -bor $htmlbold),"$($processor.l2cachesize) KB",$htmlwhite))
+		}
+		If($processor.l3cachesize -gt 0)
+		{
+			$rowdata += @(,('L3 Cache Size',($htmlsilver -bor $htmlbold),"$($processor.l3cachesize) KB",$htmlwhite))
+		}
+		If($processor.numberofcores -gt 0)
+		{
+			$rowdata += @(,('Number of Cores',($htmlsilver -bor $htmlbold),$Processor.numberofcores,$htmlwhite))
+		}
+		If($processor.numberoflogicalprocessors -gt 0)
+		{
+			$rowdata += @(,('Number of Logical Processors (cores w/HT)',($htmlsilver -bor $htmlbold),$Processor.numberoflogicalprocessors,$htmlwhite))
+		}
+		$rowdata += @(,('Availability',($htmlsilver -bor $htmlbold),$xAvailability,$htmlwhite))
+
+		$msg = "Processor(s)"
+		$columnWidths = @("150px","200px")
+		FormatHTMLTable $msg -rowarray $rowdata -columnArray $columnheaders -fixedWidth $columnWidths
+		WriteHTMLLine 0 0 ""
 	}
 }
 
 Function OutputNicItem
 {
 	Param([object]$Nic, [object]$ThisNic)
+	
+	$xAvailability = ""
+	Switch ($processor.availability)
+	{
+		1	{$xAvailability = "Other"}
+		2	{$xAvailability = "Unknown"}
+		3	{$xAvailability = "Running or Full Power"}
+		4	{$xAvailability = "Warning"}
+		5	{$xAvailability = "In Test"}
+		6	{$xAvailability = "Not Applicable"}
+		7	{$xAvailability = "Power Off"}
+		8	{$xAvailability = "Off Line"}
+		9	{$xAvailability = "Off Duty"}
+		10	{$xAvailability = "Degraded"}
+		11	{$xAvailability = "Not Installed"}
+		12	{$xAvailability = "Install Error"}
+		13	{$xAvailability = "Power Save - Unknown"}
+		14	{$xAvailability = "Power Save - Low Power Mode"}
+		15	{$xAvailability = "Power Save - Standby"}
+		16	{$xAvailability = "Power Cycle"}
+		17	{$xAvailability = "Power Save - Warning"}
+		Default	{$xAvailability = "Unknown"}
+	}
+
+	$xIPAddress = @()
+	ForEach($IPAddress in $Nic.ipaddress)
+	{
+		$xIPAddress += "$($IPAddress)"
+	}
+
+	$xIPSubnet = @()
+	ForEach($IPSubnet in $Nic.ipsubnet)
+	{
+		$xIPSubnet += "$($IPSubnet)"
+	}
+
+	If($nic.dnsdomainsuffixsearchorder -ne $Null -and $nic.dnsdomainsuffixsearchorder.length -gt 0)
+	{
+		$nicdnsdomainsuffixsearchorder = $nic.dnsdomainsuffixsearchorder
+		$xnicdnsdomainsuffixsearchorder = @()
+		ForEach($DNSDomain in $nicdnsdomainsuffixsearchorder)
+		{
+			$xnicdnsdomainsuffixsearchorder += "$($DNSDomain)"
+		}
+	}
+	
+	If($nic.dnsserversearchorder -ne $Null -and $nic.dnsserversearchorder.length -gt 0)
+	{
+		$nicdnsserversearchorder = $nic.dnsserversearchorder
+		$xnicdnsserversearchorder = @()
+		ForEach($DNSServer in $nicdnsserversearchorder)
+		{
+			$xnicdnsserversearchorder += "$($DNSServer)"
+		}
+	}
+
+	$xdnsenabledforwinsresolution = ""
+	If($nic.dnsenabledforwinsresolution)
+	{
+		$xdnsenabledforwinsresolution = "Yes"
+	}
+	Else
+	{
+		$xdnsenabledforwinsresolution = "No"
+	}
+	
+	$xTcpipNetbiosOptions = ""
+	Switch ($nic.TcpipNetbiosOptions)
+	{
+		0	{$xTcpipNetbiosOptions = "Use NetBIOS setting from DHCP Server"}
+		1	{$xTcpipNetbiosOptions = "Enable NetBIOS"}
+		2	{$xTcpipNetbiosOptions = "Disable NetBIOS"}
+		Default	{$xTcpipNetbiosOptions = "Unknown"}
+	}
+	
+	$xwinsenablelmhostslookup = ""
+	If($nic.winsenablelmhostslookup)
+	{
+		$xwinsenablelmhostslookup = "Yes"
+	}
+	Else
+	{
+		$xwinsenablelmhostslookup = "No"
+	}
+
 	If($MSWORD -or $PDF)
 	{
 		[System.Collections.Hashtable[]] $NicInformation = @()
-		If($ThisNic.Name -eq $nic.description)
+		$NicInformation += @{ Data = "Name"; Value = $ThisNic.Name; }
+		If($ThisNic.Name -ne $nic.description)
 		{
-			$NicInformation += @{ Data = "Name"; Value = $ThisNic.Name; }
-		}
-		Else
-		{
-			$NicInformation += @{ Data = "Name"; Value = $ThisNic.Name; }
 			$NicInformation += @{ Data = "Description"; Value = $Nic.description; }
 		}
 		$NicInformation += @{ Data = "Connection ID"; Value = $ThisNic.NetConnectionID; }
 		$NicInformation += @{ Data = "Manufacturer"; Value = $Nic.manufacturer; }
-		Switch ($ThisNic.availability)
-		{
-			1	{$tmp = "Other"}
-			2	{$tmp = "Unknown"}
-			3	{$tmp = "Running or Full Power"}
-			4	{$tmp = "Warning"}
-			5	{$tmp = "In Test"}
-			6	{$tmp = "Not Applicable"}
-			7	{$tmp = "Power Off"}
-			8	{$tmp = "Off Line"}
-			9	{$tmp = "Off Duty"}
-			10	{$tmp = "Degraded"}
-			11	{$tmp = "Not Installed"}
-			12	{$tmp = "Install Error"}
-			13	{$tmp = "Power Save - Unknown"}
-			14	{$tmp = "Power Save - Low Power Mode"}
-			15	{$tmp = "Power Save - Standby"}
-			16	{$tmp = "Power Cycle"}
-			17	{$tmp = "Power Save - Warning"}
-			Default	{$tmp = "Unknown"}
-		}
-		$NicInformation += @{ Data = "Availability"; Value = $tmp; }
+		$NicInformation += @{ Data = "Availability"; Value = $xAvailability; }
 		$NicInformation += @{ Data = "Physical Address"; Value = $Nic.macaddress; }
-		$NicInformation += @{ Data = "IP Address"; Value = $Nic.ipaddress; }
-		$NicInformation += @{ Data = "Default Gateway"; Value = $Nic.Defaultipgateway; }
-		$NicInformation += @{ Data = "Subnet Mask"; Value = $Nic.ipsubnet; }
+		If($xIPAddress.Count -gt 1)
+		{
+			$NicInformation += @{ Data = "IP Address"; Value = $xIPAddress[0]; }
+			$NicInformation += @{ Data = "Default Gateway"; Value = $Nic.Defaultipgateway; }
+			$NicInformation += @{ Data = "Subnet Mask"; Value = $xIPSubnet[0]; }
+			$cnt = -1
+			ForEach($tmp in $xIPAddress)
+			{
+				$cnt++
+				If($cnt -gt 0)
+				{
+					$NicInformation += @{ Data = "IP Address"; Value = $tmp; }
+					$NicInformation += @{ Data = "Subnet Mask"; Value = $xIPSubnet[$cnt]; }
+				}
+			}
+		}
+		Else
+		{
+			$NicInformation += @{ Data = "IP Address"; Value = $xIPAddress; }
+			$NicInformation += @{ Data = "Default Gateway"; Value = $Nic.Defaultipgateway; }
+			$NicInformation += @{ Data = "Subnet Mask"; Value = $xIPSubnet; }
+		}
 		If($nic.dhcpenabled)
 		{
 			$DHCPLeaseObtainedDate = $nic.ConvertToDateTime($nic.dhcpleaseobtained)
@@ -1238,52 +1424,33 @@ Function OutputNicItem
 		}
 		If($nic.dnsdomainsuffixsearchorder -ne $Null -and $nic.dnsdomainsuffixsearchorder.length -gt 0)
 		{
-			[int]$x = 1
-			WriteWordLine 0 2 "DNS Search Suffixes`t:" -nonewline
-			$nicdnsdomainsuffixsearchorder = $nic.dnsdomainsuffixsearchorder
-			$tmp = @()
-			ForEach($DNSDomain in $nicdnsdomainsuffixsearchorder)
+			$NicInformation += @{ Data = "DNS Search Suffixes"; Value = $xnicdnsdomainsuffixsearchorder[0]; }
+			$cnt = -1
+			ForEach($tmp in $xnicdnsdomainsuffixsearchorder)
 			{
-				$tmp += "$($DNSDomain)`r"
+				$cnt++
+				If($cnt -gt 0)
+				{
+					$NicInformation += @{ Data = ""; Value = $tmp; }
+				}
 			}
-			$NicInformation += @{ Data = "DNS Search Suffixes"; Value = $tmp; }
 		}
-		If($nic.dnsenabledforwinsresolution)
-		{
-			$tmp = "Yes"
-		}
-		Else
-		{
-			$tmp = "No"
-		}
-		$NicInformation += @{ Data = "DNS WINS Enabled"; Value = $tmp; }
+		$NicInformation += @{ Data = "DNS WINS Enabled"; Value = $xdnsenabledforwinsresolution; }
 		If($nic.dnsserversearchorder -ne $Null -and $nic.dnsserversearchorder.length -gt 0)
 		{
-			$nicdnsserversearchorder = $nic.dnsserversearchorder
-			$tmp = @()
-			ForEach($DNSServer in $nicdnsserversearchorder)
+			$NicInformation += @{ Data = "DNS Servers"; Value = $xnicdnsserversearchorder[0]; }
+			$cnt = -1
+			ForEach($tmp in $xnicdnsserversearchorder)
 			{
-				$tmp += "$($DNSServer)`r"
+				$cnt++
+				If($cnt -gt 0)
+				{
+					$NicInformation += @{ Data = ""; Value = $tmp; }
+				}
 			}
-			$NicInformation += @{ Data = "DNS Servers"; Value = $tmp; }
 		}
-		Switch ($nic.TcpipNetbiosOptions)
-		{
-			0	{$tmp = "Use NetBIOS setting from DHCP Server"}
-			1	{$tmp = "Enable NetBIOS"}
-			2	{$tmp = "Disable NetBIOS"}
-			Default	{$tmp = "Unknown"}
-		}
-		$NicInformation += @{ Data = "NetBIOS Setting"; Value = $tmp; }
-		If($nic.winsenablelmhostslookup)
-		{
-			$tmp = "Yes"
-		}
-		Else
-		{
-			$tmp = "No"
-		}
-		$NicInformation += @{ Data = "WINS: Enabled LMHosts"; Value = $tmp; }
+		$NicInformation += @{ Data = "NetBIOS Setting"; Value = $xTcpipNetbiosOptions; }
+		$NicInformation += @{ Data = "WINS: Enabled LMHosts"; Value = $xwinsenablelmhostslookup; }
 		If(![String]::IsNullOrEmpty($nic.winshostlookupfile))
 		{
 			$NicInformation += @{ Data = "Host Lookup File"; Value = $Nic.winshostlookupfile; }
@@ -1309,50 +1476,43 @@ Function OutputNicItem
 		$Table.Columns.Item(1).Width = 150;
 		$Table.Columns.Item(2).Width = 200;
 
-		$Table.Rows.SetLeftIndent($Indent2TabStops,$wdAdjustNone)
+		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
 
 		FindWordDocumentEnd
 		$Table = $Null
 	}
 	ElseIf($Text)
 	{
-		If($ThisNic.Name -eq $nic.description)
+		Line 2 "Name`t`t`t: " $ThisNic.Name
+		If($ThisNic.Name -ne $nic.description)
 		{
-			Line 2 "Name`t`t`t: " $ThisNic.Name
-		}
-		Else
-		{
-			Line 2 "Name`t`t`t: " $ThisNic.Name
 			Line 2 "Description`t`t: " $nic.description
 		}
 		Line 2 "Connection ID`t`t: " $ThisNic.NetConnectionID
 		Line 2 "Manufacturer`t`t: " $ThisNic.manufacturer
-		Line 2 "Availability`t`t: " -nonewline
-		Switch ($ThisNic.availability)
-		{
-			1	{Line 0 "Other"}
-			2	{Line 0 "Unknown"}
-			3	{Line 0 "Running or Full Power"}
-			4	{Line 0 "Warning"}
-			5	{Line 0 "In Test"}
-			6	{Line 0 "Not Applicable"}
-			7	{Line 0 "Power Off"}
-			8	{Line 0 "Off Line"}
-			9	{Line 0 "Off Duty"}
-			10	{Line 0 "Degraded"}
-			11	{Line 0 "Not Installed"}
-			12	{Line 0 "Install Error"}
-			13	{Line 0 "Power Save - Unknown"}
-			14	{Line 0 "Power Save - Low Power Mode"}
-			15	{Line 0 "Power Save - Standby"}
-			16	{Line 0 "Power Cycle"}
-			17	{Line 0 "Power Save - Warning"}
-			Default	{Line 0 "Unknown"}
-		}
+		Line 2 "Availability`t`t: " $xAvailability
 		Line 2 "Physical Address`t: " $nic.macaddress
-		Line 2 "IP Address`t`t: " $nic.ipaddress
-		Line 2 "Default Gateway`t`t: " $nic.Defaultipgateway
-		Line 2 "Subnet Mask`t`t: " $nic.ipsubnet
+		Line 2 "IP Address`t`t: " $xIPAddress[0]
+		$cnt = -1
+		ForEach($tmp in $xIPAddress)
+		{
+			$cnt++
+			If($cnt -gt 0)
+			{
+				Line 5 "" $tmp
+			}
+		}
+		Line 2 "Default Gateway`t`t: " $Nic.Defaultipgateway
+		Line 2 "Subnet Mask`t`t: " $xIPSubnet[0]
+		$cnt = -1
+		ForEach($tmp in $xIPSubnet)
+		{
+			$cnt++
+			If($cnt -gt 0)
+			{
+				Line 5 "" $tmp
+			}
+		}
 		If($nic.dhcpenabled)
 		{
 			$DHCPLeaseObtainedDate = $nic.ConvertToDateTime($nic.dhcpleaseobtained)
@@ -1369,66 +1529,35 @@ Function OutputNicItem
 		If($nic.dnsdomainsuffixsearchorder -ne $Null -and $nic.dnsdomainsuffixsearchorder.length -gt 0)
 		{
 			[int]$x = 1
-			Line 2 "DNS Search Suffixes`t:" -nonewline
-			$nicdnsdomainsuffixsearchorder = $nic.dnsdomainsuffixsearchorder
-			ForEach($DNSDomain in $nicdnsdomainsuffixsearchorder)
+			Line 2 "DNS Search Suffixes`t:" $xnicdnsdomainsuffixsearchorder[0]
+			$cnt = -1
+			ForEach($tmp in $xnicdnsdomainsuffixsearchorder)
 			{
-				If($x -eq 1)
+				$cnt++
+				If($cnt -gt 0)
 				{
-					$x = 2
-					Line 0 " $($DNSDomain)"
-				}
-				Else
-				{
-					Line 5 " $($DNSDomain)"
+					$ScriptInformation += @{ Data = ""; Value = $tmp; }
 				}
 			}
 		}
-		Line 2 "DNS WINS Enabled`t: " -nonewline
-		If($nic.dnsenabledforwinsresolution)
-		{
-			Line 0 "Yes"
-		}
-		Else
-		{
-			Line 0 "No"
-		}
+		Line 2 "DNS WINS Enabled`t: " $xdnsenabledforwinsresolution
 		If($nic.dnsserversearchorder -ne $Null -and $nic.dnsserversearchorder.length -gt 0)
 		{
 			[int]$x = 1
-			Line 2 "DNS Servers`t`t:" -nonewline
-			$nicdnsserversearchorder = $nic.dnsserversearchorder
-			ForEach($DNSServer in $nicdnsserversearchorder)
+			Line 2 "DNS Servers`t`t:" $xnicdnsserversearchorder[0]
+			$cnt = -1
+			ForEach($tmp in $xnicdnsserversearchorder)
 			{
-				If($x -eq 1)
+				$cnt++
+				If($cnt -gt 0)
 				{
-					$x = 2
-					Line 0 " $($DNSServer)"
-				}
-				Else
-				{
-					Line 5 " $($DNSServer)"
+					$ScriptInformation += @{ Data = ""; Value = $tmp; }
 				}
 			}
 		}
-		Line 2 "NetBIOS Setting`t`t: " -nonewline
-		Switch ($nic.TcpipNetbiosOptions)
-		{
-			0	{Line 0 "Use NetBIOS setting from DHCP Server"}
-			1	{Line 0 "Enable NetBIOS"}
-			2	{Line 0 "Disable NetBIOS"}
-			Default	{Line 0 "Unknown"}
-		}
+		Line 2 "NetBIOS Setting`t`t: " $xTcpipNetbiosOptions
 		Line 2 "WINS:"
-		Line 3 "Enabled LMHosts`t: " -nonewline
-		If($nic.winsenablelmhostslookup)
-		{
-			Line 0 "Yes"
-		}
-		Else
-		{
-			Line 0 "No"
-		}
+		Line 3 "Enabled LMHosts`t: " $xwinsenablelmhostslookup
 		If(![String]::IsNullOrEmpty($nic.winshostlookupfile))
 		{
 			Line 3 "Host Lookup File`t: " $nic.winshostlookupfile
@@ -1448,8 +1577,103 @@ Function OutputNicItem
 	}
 	ElseIf($HTML)
 	{
+		$rowdata = @()
+		$columnHeaders = @("Name",($htmlsilver -bor $htmlbold),$ThisNic.Name,$htmlwhite)
+		If($ThisNic.Name -ne $nic.description)
+		{
+			$rowdata += @(,('Description',($htmlsilver -bor $htmlbold),$Nic.description,$htmlwhite))
+		}
+		$rowdata += @(,('Connection ID',($htmlsilver -bor $htmlbold),$ThisNic.NetConnectionID,$htmlwhite))
+		$rowdata += @(,('Manufacturer',($htmlsilver -bor $htmlbold),$Nic.manufacturer,$htmlwhite))
+		$rowdata += @(,('Availability',($htmlsilver -bor $htmlbold),$xAvailability,$htmlwhite))
+		$rowdata += @(,('Physical Address',($htmlsilver -bor $htmlbold),$Nic.macaddress,$htmlwhite))
+		$rowdata += @(,('IP Address',($htmlsilver -bor $htmlbold),$xIPAddress[0],$htmlwhite))
+		$cnt = -1
+		ForEach($tmp in $xIPAddress)
+		{
+			$cnt++
+			If($cnt -gt 0)
+			{
+				$rowdata += @(,('IP Address',($htmlsilver -bor $htmlbold),$tmp,$htmlwhite))
+			}
+		}
+		$rowdata += @(,('Default Gateway',($htmlsilver -bor $htmlbold),$Nic.Defaultipgateway,$htmlwhite))
+		$rowdata += @(,('Subnet Mask',($htmlsilver -bor $htmlbold),$xIPSubnet[0],$htmlwhite))
+		$cnt = -1
+		ForEach($tmp in $xIPSubnet)
+		{
+			$cnt++
+			If($cnt -gt 0)
+			{
+				$rowdata += @(,('Subnet Mask',($htmlsilver -bor $htmlbold),$tmp,$htmlwhite))
+			}
+		}
+		If($nic.dhcpenabled)
+		{
+			$DHCPLeaseObtainedDate = $nic.ConvertToDateTime($nic.dhcpleaseobtained)
+			$DHCPLeaseExpiresDate = $nic.ConvertToDateTime($nic.dhcpleaseexpires)
+			$rowdata += @(,('DHCP Enabled',($htmlsilver -bor $htmlbold),$Nic.dhcpenabled,$htmlwhite))
+			$rowdata += @(,('DHCP Lease Obtained',($htmlsilver -bor $htmlbold),$dhcpleaseobtaineddate,$htmlwhite))
+			$rowdata += @(,('DHCP Lease Expires',($htmlsilver -bor $htmlbold),$dhcpleaseexpiresdate,$htmlwhite))
+			$rowdata += @(,('DHCP Server',($htmlsilver -bor $htmlbold),$Nic.dhcpserver,$htmlwhite))
+		}
+		If(![String]::IsNullOrEmpty($nic.dnsdomain))
+		{
+			$rowdata += @(,('DNS Domain',($htmlsilver -bor $htmlbold),$Nic.dnsdomain,$htmlwhite))
+		}
+		If($nic.dnsdomainsuffixsearchorder -ne $Null -and $nic.dnsdomainsuffixsearchorder.length -gt 0)
+		{
+			$rowdata += @(,('DNS Search Suffixes',($htmlsilver -bor $htmlbold),$xnicdnsdomainsuffixsearchorder[0],$htmlwhite))
+			$cnt = -1
+			ForEach($tmp in $xnicdnsdomainsuffixsearchorder)
+			{
+				$cnt++
+				If($cnt -gt 0)
+				{
+					$rowdata += @(,('',($htmlsilver -bor $htmlbold),$tmp,$htmlwhite))
+				}
+			}
+		}
+		$rowdata += @(,('DNS WINS Enabled',($htmlsilver -bor $htmlbold),$xdnsenabledforwinsresolution,$htmlwhite))
+		If($nic.dnsserversearchorder -ne $Null -and $nic.dnsserversearchorder.length -gt 0)
+		{
+			$rowdata += @(,('DNS Servers',($htmlsilver -bor $htmlbold),$xnicdnsserversearchorder[0],$htmlwhite))
+			$cnt = -1
+			ForEach($tmp in $xnicdnsserversearchorder)
+			{
+				$cnt++
+				If($cnt -gt 0)
+				{
+					$rowdata += @(,('',($htmlsilver -bor $htmlbold),$tmp,$htmlwhite))
+				}
+			}
+		}
+		$rowdata += @(,('NetBIOS Setting',($htmlsilver -bor $htmlbold),$xTcpipNetbiosOptions,$htmlwhite))
+		$rowdata += @(,('WINS: Enabled LMHosts',($htmlsilver -bor $htmlbold),$xwinsenablelmhostslookup,$htmlwhite))
+		If(![String]::IsNullOrEmpty($nic.winshostlookupfile))
+		{
+			$rowdata += @(,('Host Lookup File',($htmlsilver -bor $htmlbold),$Nic.winshostlookupfile,$htmlwhite))
+		}
+		If(![String]::IsNullOrEmpty($nic.winsprimaryserver))
+		{
+			$rowdata += @(,('Primary Server',($htmlsilver -bor $htmlbold),$Nic.winsprimaryserver,$htmlwhite))
+		}
+		If(![String]::IsNullOrEmpty($nic.winssecondaryserver))
+		{
+			$rowdata += @(,('Secondary Server',($htmlsilver -bor $htmlbold),$Nic.winssecondaryserver,$htmlwhite))
+		}
+		If(![String]::IsNullOrEmpty($nic.winsscopeid))
+		{
+			$rowdata += @(,('Scope ID',($htmlsilver -bor $htmlbold),$Nic.winsscopeid,$htmlwhite))
+		}
+
+		$msg = "Network Interface(s)"
+		$columnWidths = @("150px","200px")
+		FormatHTMLTable $msg -rowarray $rowdata -columnArray $columnheaders -fixedWidth $columnWidths
+		WriteHTMLLine 0 0 ""
 	}
 }
+#endregion
 
 Function SetWordHashTable
 {
@@ -4184,7 +4408,7 @@ ForEach($PVSSite in $PVSSites)
 							WriteWordLine 0 3 "Cache Size: $($Disk.writeCacheSize) MBs"
 							}
 						4   {WriteWordLine 0 0 "Cache on device's HD"}
-						5   {WriteWordLine 0 0 "Cache encrypted on device's HD"}
+						5   {WriteWordLine 0 0 "Cache encrypted on device's hard disk"}
 						6   {WriteWordLine 0 0 "RAM Disk"}
 						7   {WriteWordLine 0 0 "Difference Disk"}
 						Default {WriteWordLine 0 0 "Cache type could not be determined: $($Disk.writeCacheType)"}
@@ -4333,10 +4557,14 @@ ForEach($PVSSite in $PVSSites)
 					{
 						0   {WriteWordLine 0 0 "Private Image"}
 						1   {WriteWordLine 0 0 "Cache on server"}
-						3   {WriteWordLine 0 0 "Cache in device RAM"}
-						4   {WriteWordLine 0 0 "Cache on device hard disk"}
-						7   {WriteWordLine 0 0 "Cache on server persisted"}
-						8   {WriteWordLine 0 0 "Cache on device hard drive persisted (NT 6.1 and later)"}
+						3   {
+							WriteWordLine 0 0 "Cache in device RAM"
+							WriteWordLine 0 3 "Cache Size: $($Disk.writeCacheSize) MBs"
+							}
+						4   {WriteWordLine 0 0 "Cache on device's hard disk"}
+						6   {WriteWordLine 0 0 "RAM Disk"}
+						7   {WriteWordLine 0 0 "Difference Disk"}
+						9   {WriteWordLine 0 0 "Cache in device RAM with overflow on hard disk"}
 						Default {WriteWordLine 0 0 "Cache type could not be determined: $($Disk.writeCacheType)"}
 					}
 				}
