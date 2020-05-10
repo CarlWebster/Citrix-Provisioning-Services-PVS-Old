@@ -239,9 +239,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: PVS_Inventory_V42.ps1
-	VERSION: 4.21
+	VERSION: 4.22
 	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith, Jeff Wouters and Iain Brighton)
-	LASTEDIT: July 8, 2015
+	LASTEDIT: August 11, 2015
 #>
 
 
@@ -339,6 +339,9 @@ Param(
 #	Remove writeCacheType 3 and 5 from PVS 6 and 7
 #	Updated help text
 #	Updated hardware inventory code
+#
+#Version 4.22
+#	Fixed processing of the Options tab for ServerBootstrap files
 
 Set-StrictMode -Version 2
 
@@ -4225,64 +4228,65 @@ ForEach($PVSSite in $PVSSites)
 							WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver4_Port
 						}
 						WriteWordLine 0 0 ""
+						Write-Verbose "$(Get-Date): `t`t`t`t`t`tProcessing Options Tab"
+						WriteWordLine 0 1 "Options"
+						WriteWordLine 0 2 "Verbose mode`t`t`t: " -nonewline
+						If($ServerBootstrap.verboseMode -eq "1")
+						{
+							WriteWordLine 0 0 "Yes"
+						}
+						Else
+						{
+							WriteWordLine 0 0 "No"
+						}
+						WriteWordLine 0 2 "Interrupt safe mode`t`t: " -nonewline
+						If($ServerBootstrap.interruptSafeMode -eq "1")
+						{
+							WriteWordLine 0 0 "Yes"
+						}
+						Else
+						{
+							WriteWordLine 0 0 "No"
+						}
+						WriteWordLine 0 2 "Advanced Memory Support`t: " -nonewline
+						If($ServerBootstrap.paeMode -eq "1")
+						{
+							WriteWordLine 0 0 "Yes"
+						}
+						Else
+						{
+							WriteWordLine 0 0 "No"
+						}
+						WriteWordLine 0 2 "Network recovery method`t: " -nonewline
+						If($ServerBootstrap.bootFromHdOnFail -eq "0")
+						{
+							WriteWordLine 0 0 "Restore network connection"
+						}
+						Else
+						{
+							WriteWordLine 0 0 "Reboot to Hard Drive after $($ServerBootstrap.recoveryTime) seconds"
+						}
+						WriteWordLine 0 2 "Timeouts"
+						WriteWordLine 0 3 "Login polling timeout`t: " -nonewline
+						If($ServerBootstrap.pollingTimeout -eq "")
+						{
+							WriteWordLine 0 0 "5000 (milliseconds)"
+						}
+						Else
+						{
+							WriteWordLine 0 0 "$($ServerBootstrap.pollingTimeout) (milliseconds)"
+						}
+						WriteWordLine 0 3 "Login general timeout`t: " -nonewline
+						If($ServerBootstrap.generalTimeout -eq "")
+						{
+							WriteWordLine 0 0 "5000 (milliseconds)"
+						}
+						Else
+						{
+							WriteWordLine 0 0 "$($ServerBootstrap.generalTimeout) (milliseconds)"
+						}
+						WriteWordLine 0 0 ""
 					}
-				}
-				Write-Verbose "$(Get-Date): `t`t`t`t`t`tProcessing Options Tab"
-				WriteWordLine 0 1 "Options"
-				WriteWordLine 0 2 "Verbose mode`t`t`t: " -nonewline
-				If($ServerBootstrap.verboseMode -eq "1")
-				{
-					WriteWordLine 0 0 "Yes"
-				}
-				Else
-				{
-					WriteWordLine 0 0 "No"
-				}
-				WriteWordLine 0 2 "Interrupt safe mode`t`t: " -nonewline
-				If($ServerBootstrap.interruptSafeMode -eq "1")
-				{
-					WriteWordLine 0 0 "Yes"
-				}
-				Else
-				{
-					WriteWordLine 0 0 "No"
-				}
-				WriteWordLine 0 2 "Advanced Memory Support`t: " -nonewline
-				If($ServerBootstrap.paeMode -eq "1")
-				{
-					WriteWordLine 0 0 "Yes"
-				}
-				Else
-				{
-					WriteWordLine 0 0 "No"
-				}
-				WriteWordLine 0 2 "Network recovery method`t: " -nonewline
-				If($ServerBootstrap.bootFromHdOnFail -eq "0")
-				{
-					WriteWordLine 0 0 "Restore network connection"
-				}
-				Else
-				{
-					WriteWordLine 0 0 "Reboot to Hard Drive after $($ServerBootstrap.recoveryTime) seconds"
-				}
-				WriteWordLine 0 2 "Timeouts"
-				WriteWordLine 0 3 "Login polling timeout`t: " -nonewline
-				If($ServerBootstrap.pollingTimeout -eq "")
-				{
-					WriteWordLine 0 0 "5000 (milliseconds)"
-				}
-				Else
-				{
-					WriteWordLine 0 0 "$($ServerBootstrap.pollingTimeout) (milliseconds)"
-				}
-				WriteWordLine 0 3 "Login general timeout`t: " -nonewline
-				If($ServerBootstrap.generalTimeout -eq "")
-				{
-					WriteWordLine 0 0 "5000 (milliseconds)"
-				}
-				Else
-				{
-					WriteWordLine 0 0 "$($ServerBootstrap.generalTimeout) (milliseconds)"
 				}
 			}
 			Else
