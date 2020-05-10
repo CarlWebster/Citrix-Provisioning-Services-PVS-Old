@@ -81,6 +81,12 @@
 	Specifies the domain used for the AdminAddress connection. 
 .PARAMETER Password
 	Specifies the password used for the AdminAddress connection. 
+.PARAMETER StartDate
+	Start date, in MM/DD/YYYY format, for the Audit Trail report.
+	Default is today's date minus seven days.
+.PARAMETER EndDate
+	End date, in MM/DD/YYYY format, for the Audit Trail report.
+	Default is today's date.
 .EXAMPLE
 	PS C:\PSScript > .\PVS_Inventory_V41.ps1
 	
@@ -167,15 +173,29 @@
 		PVS1 for AdminAddress.
 		cwebster for User.
 		Script will prompt for the Domain and Password
+.EXAMPLE
+	PS C:\PSScript > .\PVS_Inventory_V41.ps1 -StartDate "01/01/2014" -EndDate "01/31/2014" -verbose
+	
+	Will use all Default values.
+	HKEY_CURRENT_USER\Software\Microsoft\Office\Common\UserInfo\Company="Carl Webster"
+	$env:username = Administrator
+	AdminAddress = LocalHost
+
+	Carl Webster for the Company Name.
+	Sideline for the Cover Page format.
+	Administrator for the User Name.
+	LocalHost for AdminAddress.
+	Will display verbose messages as the script is running.
+	Will return all Audit Trail entries from "01/01/2014" through "01/31/2014".
 .INPUTS
 	None.  You cannot pipe objects to this script.
 .OUTPUTS
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: PVS_Inventory_V41.ps1
-	VERSION: 4.11
+	VERSION: 4.12
 	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith and Jeff Wouters)
-	LASTEDIT: January 28, 2014
+	LASTEDIT: February 2, 2014
 #>
 
 
@@ -239,7 +259,21 @@ Param([parameter(
 	Position = 8, 
 	Mandatory=$False)
 	] 
-	[string]$Password="")
+	[string]$Password="",
+	
+	[parameter(
+	Position = 9, 
+	Mandatory=$False)
+	] 
+	[Datetime]$StartDate = ((Get-Date -displayhint date).AddDays(-7)),
+
+	[parameter(
+	Position = 10, 
+	Mandatory=$False)
+	] 
+	[Datetime]$EndDate = (Get-Date -displayhint date)
+
+	)
 
 
 #force -verbose on
@@ -289,6 +323,10 @@ $PSDefaultParameterValues = @{"*:Verbose"=$True}
 #Version 4.11
 #	Fixed the formatting of three lines
 #	Test to see if server is online before process bootstrap files
+#Version 4.12
+#	Added vDisk Versions
+#	Added Audit Trail report as a table to the Site section
+#	Added StartDate and EndDate parameters to support the Audit Trail
 
 
 Set-StrictMode -Version 2
@@ -298,6 +336,7 @@ Set-StrictMode -Version 2
 #http://msdn.microsoft.com/en-us/library/office/aa211923(v=office.11).aspx
 [int]$wdAlignPageNumberRight = 2
 [long]$wdColorGray15 = 14277081
+[long]$wdColorGray05 = 15987699 
 [int]$wdMove = 0
 [int]$wdSeekMainDocument = 0
 [int]$wdSeekPrimaryFooter = 4
@@ -1741,6 +1780,8 @@ Write-Verbose "$(Get-Date): Cover Page   : $CoverPage"
 Write-Verbose "$(Get-Date): User Name    : $UserName"
 Write-Verbose "$(Get-Date): Save As PDF  : $PDF"
 Write-Verbose "$(Get-Date): HW Inventory : $Hardware"
+Write-Verbose "$(Get-Date): Start Date   : $StartDate"
+Write-Verbose "$(Get-Date): End Date     : $EndDate"
 Write-Verbose "$(Get-Date): Farm Name    : $FarmName"
 Write-Verbose "$(Get-Date): Title        : $Title"
 Write-Verbose "$(Get-Date): Filename1    : $filename1"
@@ -2887,7 +2928,7 @@ ForEach($PVSSite in $PVSSites)
 				}
 				If(![String]::IsNullOrEmpty($Disk.menuText))
 				{
-					WriteWordLine 0 3 "BIOS boot menu text`t: " $Disk.menuText
+					WriteWordLine 0 3 "BIOS boot menu text`t`t`t: " $Disk.menuText
 				}
 				WriteWordLine 0 3 "Enable AD machine acct pwd mgmt`t: " -nonewline
 				If($Disk.adPasswordEnabled -eq "1")
@@ -3018,6 +3059,190 @@ ForEach($PVSSite in $PVSSites)
 				WriteWordLine 0 3 "Minor #`t: " $Disk.minorRelease
 				WriteWordLine 0 3 "Build #`t: " $Disk.build
 				WriteWordLine 0 3 "Serial #`t: " $Disk.serialNumber
+				
+				#process Versions menu
+				#get versions info
+				Write-Verbose "$(Get-Date): `t`t`tProcessing vDisk Versions"
+				$VersionsObjects = @()
+				$error.Clear()
+				$MCLIGetResult = Mcli-Get DiskVersion -p diskLocatorName="$($Disk.diskLocatorName)",storeName="$($disk.storeName)",siteName="$($disk.siteName)"
+				If($error.Count -eq 0)
+				{
+					#build versions object
+					$PluralObject = @()
+					$SingleObject = $Null
+					ForEach($record in $MCLIGetResult)
+					{
+						If($record.length -gt 5 -and $record.substring(0,6) -eq "Record")
+						{
+							If($SingleObject -ne $Null)
+							{
+								$PluralObject += $SingleObject
+							}
+							$SingleObject = new-object System.Object
+						}
+
+						$index = $record.IndexOf(':')
+						If($index -gt 0)
+						{
+							$property = $record.SubString(0, $index)
+							$value    = $record.SubString($index + 2)
+							If($property -ne "Executing")
+							{
+								Add-Member -inputObject $SingleObject -MemberType NoteProperty -Name $property -Value $value
+							}
+						}
+					}
+					$PluralObject += $SingleObject
+					$DiskVersions = $PluralObject
+					
+					If($DiskVersions -ne $Null)
+					{
+						WriteWordLine 0 1 "vDisk Versions"
+						#get the current booting version
+						#by default, the $DiskVersions object is in version number order lowest to highest
+						#the initial or base version is 0 and always exists
+						[int]$BootingVersion = 0
+						[bool]$BootOverride = $False
+						ForEach($DiskVersion in $DiskVersions)
+						{
+							If($DiskVersion.access -eq 3)
+							{
+								#override i.e. manually selected boot version
+								$BootingVersion = $DiskVersion.version
+								$BootOverride = $True
+								Exit
+							}
+							ElseIf($DiskVersion.access -eq 0 -and !$DiskVersion.IsPending )
+							{
+								$BootingVersion = $DiskVersion.version
+								$BootOverride = $False
+							}
+						}
+						
+						WriteWordLine 0 2 "Boot production devices from version: " -NoNewLine
+						If($BootOverride)
+						{
+							WriteWordLine 0 0 $BootingVersion
+						}
+						Else
+						{
+							WriteWordLine 0 0 "Newest released"
+						}
+						WriteWordLine 0 0 ""
+						
+						ForEach($DiskVersion in $DiskVersions)
+						{
+							Write-Verbose "$(Get-Date): `t`t`t`tProcessing vDisk Version $($DiskVersion.version)"
+							If($DiskVersion.version -eq $BootingVersion)
+							{
+								WriteWordLine 0 2 "Current booting version"
+							}
+							WriteWordLine 0 2 "Version`t`t`t`t`t: " $DiskVersion.version
+							WriteWordLine 0 2 "Created`t`t`t`t`t: " $DiskVersion.createDate
+							If(![String]::IsNullOrEmpty($DiskVersion.scheduledDate))
+							{
+								WriteWordLine 0 2 "Released`t`t`t`t: " $DiskVersion.scheduledDate
+							}
+							WriteWordLine 0 2 "Devices`t`t`t`t`t: " $DiskVersion.deviceCount
+							WriteWordLine 0 2 "Access`t`t`t`t`t: " -NoNewLine
+							Switch ($DiskVersion.access)
+							{
+								0 {WriteWordLine 0 0 "Production"}
+								1 {WriteWordLine 0 0 "Maintenance"}
+								2 {WriteWordLine 0 0 "Maintenance Highest Version"}
+								3 {WriteWordLine 0 0 "Override"}
+								4 {WriteWordLine 0 0 "Merge"}
+								5 {WriteWordLine 0 0 "Merge Maintenance"}
+								6 {WriteWordLine 0 0 "Merge Test"}
+								7 {WriteWordLine 0 0 "Test"}
+								Default {WriteWordLine 0 0 "Access could not be determined: $($DiskVersion.access)"}
+							}
+							WriteWordLine 0 2 "Type`t`t`t`t`t: " -NoNewLine
+							Switch ($DiskVersion.type)
+							{
+								0 {WriteWordLine 0 0 "Base"}
+								1 {WriteWordLine 0 0 "Manual"}
+								2 {WriteWordLine 0 0 "Automatic"}
+								3 {WriteWordLine 0 0 "Merge"}
+								4 {WriteWordLine 0 0 "Merge Base"}
+								Default {WriteWordLine 0 0 "Type could not be determined: $($DiskVersion.type)"}
+							}
+							If(![String]::IsNullOrEmpty($DiskVersion.description))
+							{
+								WriteWordLine 0 2 "Properties`t`t`t`t: " $DiskVersion.description
+							}
+							WriteWordLine 0 2 "Can Delete`t`t`t`t: "  -NoNewLine
+							Switch ($DiskVersion.canDelete)
+							{
+								0 {WriteWordLine 0 0 "No"}
+								1 {WriteWordLine 0 0 "Yes"}
+							}
+							WriteWordLine 0 2 "Can Merge`t`t`t`t: "  -NoNewLine
+							Switch ($DiskVersion.canMerge)
+							{
+								0 {WriteWordLine 0 0 "No"}
+								1 {WriteWordLine 0 0 "Yes"}
+							}
+							WriteWordLine 0 2 "Can Merge Base`t`t`t: "  -NoNewLine
+							Switch ($DiskVersion.canMergeBase)
+							{
+								0 {WriteWordLine 0 0 "No"}
+								1 {WriteWordLine 0 0 "Yes"}
+							}
+							WriteWordLine 0 2 "Can Promote`t`t`t`t: "  -NoNewLine
+							Switch ($DiskVersion.canPromote)
+							{
+								0 {WriteWordLine 0 0 "No"}
+								1 {WriteWordLine 0 0 "Yes"}
+							}
+							WriteWordLine 0 2 "Can Revert back to Test`t`t`t: "  -NoNewLine
+							Switch ($DiskVersion.canRevertTest)
+							{
+								0 {WriteWordLine 0 0 "No"}
+								1 {WriteWordLine 0 0 "Yes"}
+							}
+							WriteWordLine 0 2 "Can Revert back to Maintenance`t: "  -NoNewLine
+							Switch ($DiskVersion.canRevertMaintenance)
+							{
+								0 {WriteWordLine 0 0 "No"}
+								1 {WriteWordLine 0 0 "Yes"}
+							}
+							WriteWordLine 0 2 "Can Set Scheduled Date`t`t`t: "  -NoNewLine
+							Switch ($DiskVersion.canSetScheduledDate)
+							{
+								0 {WriteWordLine 0 0 "No"}
+								1 {WriteWordLine 0 0 "Yes"}
+							}
+							WriteWordLine 0 2 "Can Override`t`t`t`t: "  -NoNewLine
+							Switch ($DiskVersion.canOverride)
+							{
+								0 {WriteWordLine 0 0 "No"}
+								1 {WriteWordLine 0 0 "Yes"}
+							}
+							WriteWordLine 0 2 "Is Pending`t`t`t`t: "  -NoNewLine
+							Switch ($DiskVersion.isPending)
+							{
+								0 {WriteWordLine 0 0 "No, version Scheduled Date has occurred"}
+								1 {WriteWordLine 0 0 "Yes, version Scheduled Date has not occurred"}
+							}
+							WriteWordLine 0 2 "Replication Status`t`t`t: " -NoNewLine
+							Switch ($DiskVersion.goodInventoryStatus)
+							{
+								0 {WriteWordLine 0 0 "Not available on all servers"}
+								1 {WriteWordLine 0 0 "Available on all servers"}
+								Default {WriteWordLine 0 0 "Replication status could not be determined: $($DiskVersion.goodInventoryStatus)"}
+							}
+							WriteWordLine 0 2 "Disk Filename`t`t`t`t: " $DiskVersion.diskFileName
+							WriteWordLine 0 0 ""
+						}
+					}
+				}
+				Else
+				{
+					WriteWordLine 0 0 "Disk Version information could not be retrieved"
+					WriteWordLine 0 0 "Error returned is " $error[0].FullyQualifiedErrorId.Split(',')[0].Trim()
+				}
 				
 				#process vDisk Load Balancing Menu
 				Write-Verbose "$(Get-Date): `t`t`tProcessing vDisk Load Balancing Menu"
@@ -3746,7 +3971,6 @@ ForEach($PVSSite in $PVSSites)
 	{
 		#process all virtual hosts for this site
 		Write-Verbose "$(Get-Date): `t`t`tProcessing virtual hosts (PVS7)"
-		WriteWordLine 0 1 "Hosts"
 		$Temp = $PVSSite.SiteName
 		$GetWhat = "VirtualHostingPool"
 		$GetParam = "siteName = $Temp"
@@ -3754,7 +3978,7 @@ ForEach($PVSSite in $PVSSites)
 		$vHosts = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 		If($vHosts -ne $Null)
 		{
-			WriteWordLine 3 0 "Hosts"
+			WriteWordLine 2 0 "Hosts"
 			ForEach($vHost in $vHosts)
 			{
 				Write-Verbose "$(Get-Date): `t`t`t`tProcessing virtual host $($vHost.virtualHostingPoolName)"
@@ -3781,6 +4005,307 @@ ForEach($PVSSite in $PVSSites)
 				WriteWordLine 0 2 "Update timeout`t`t: $($vHost.updateTimeout) minutes"
 				WriteWordLine 0 2 "Shutdown timeout`t: $($vHost.shutdownTimeout) minutes"
 			}
+			WriteWordLine 0 0 ""
+		}
+	}
+	
+	#add Audit Trail
+	Write-Verbose "$(Get-Date): `t`t`tProcessing Audit Trail"
+	$AuditTrailObjects = @()
+	$error.Clear()
+	
+	#the audittrail call requires the dates in YYYY/MM/DD format
+	$Sdate = '{0:yyyy/MM/dd}' -f $StartDate
+	$Edate = '{0:yyyy/MM/dd}' -f $EndDate
+	$MCLIGetResult = Mcli-Get AuditTrail -p siteName="$($PVSSite.siteName)",beginDate="$($SDate)",endDate="$($EDate)"
+	If($error.Count -eq 0)
+	{
+		#build audit trail object
+		$PluralObject = @()
+		$SingleObject = $Null
+		ForEach($record in $MCLIGetResult)
+		{
+			If($record.length -gt 5 -and $record.substring(0,6) -eq "Record")
+			{
+				If($SingleObject -ne $Null)
+				{
+					$PluralObject += $SingleObject
+				}
+				$SingleObject = new-object System.Object
+			}
+
+			$index = $record.IndexOf(':')
+			If($index -gt 0)
+			{
+				$property = $record.SubString(0, $index)
+				$value    = $record.SubString($index + 2)
+				If($property -ne "Executing")
+				{
+					Add-Member -inputObject $SingleObject -MemberType NoteProperty -Name $property -Value $value
+				}
+			}
+		}
+		$PluralObject += $SingleObject
+		$Audits = $PluralObject
+		
+		If($Audits -ne $Null)
+		{
+			$selection.InsertNewPage()
+			WriteWordLine 2 0 "Audit Trail"
+			WriteWordLine 0 0 "Audit Trail for dates $($StartDate) through $($EndDate)"
+			$TableRange   = $doc.Application.Selection.Range
+			[int]$Columns = 6
+			If($Audits -is [array])
+			{
+				[int]$Rows = $Audits.Count +1
+			}
+			Else
+			{
+				[int]$Rows = 2
+			}
+			Write-Verbose "$(Get-Date): `t`t`t`tAdd Audit Trail table to doc"
+			$Table = $doc.Tables.Add($TableRange, $Rows, $Columns)
+			$table.Style = "Table Grid"
+			$table.Borders.InsideLineStyle = 0
+			$table.Borders.OutsideLineStyle = 1
+			$Table.Cell(1,1).Shading.BackgroundPatternColor = $wdColorGray15
+			$Table.Cell(1,1).Range.Font.Bold = $True
+			$Table.Cell(1,1).Range.Font.size = 9
+			$Table.Cell(1,1).Range.Text = "Date/Time"
+			$Table.Cell(1,2).Shading.BackgroundPatternColor = $wdColorGray15
+			$Table.Cell(1,2).Range.Font.Bold = $True
+			$Table.Cell(1,2).Range.Font.size = 9
+			$Table.Cell(1,2).Range.Text = "Action"
+			$Table.Cell(1,3).Shading.BackgroundPatternColor = $wdColorGray15
+			$Table.Cell(1,3).Range.Font.Bold = $True
+			$Table.Cell(1,3).Range.Font.size = 9
+			$Table.Cell(1,3).Range.Text = "Type"
+			$Table.Cell(1,4).Shading.BackgroundPatternColor = $wdColorGray15
+			$Table.Cell(1,4).Range.Font.Bold = $True
+			$Table.Cell(1,4).Range.Font.size = 9
+			$Table.Cell(1,4).Range.Text = "Name"
+			$Table.Cell(1,5).Shading.BackgroundPatternColor = $wdColorGray15
+			$Table.Cell(1,5).Range.Font.Bold = $True
+			$Table.Cell(1,5).Range.Font.size = 9
+			$Table.Cell(1,5).Range.Text = "User"
+			$Table.Cell(1,6).Shading.BackgroundPatternColor = $wdColorGray15
+			$Table.Cell(1,6).Range.Font.Bold = $True
+			$Table.Cell(1,6).Range.Font.size = 9
+			$Table.Cell(1,6).Range.Text = "Path"
+			[int]$xRow = 1
+			[int]$Cnt = 0
+			ForEach($Audit in $Audits)
+			{
+				$xRow++
+				$Cnt++
+				Write-Verbose "$(Get-Date): `t`t`tAdding row for audit trail item # $Cnt"
+				If($xRow % 2 -eq 0)
+				{
+					$Table.Cell($xRow,1).Shading.BackgroundPatternColor = $wdColorGray05
+					$Table.Cell($xRow,2).Shading.BackgroundPatternColor = $wdColorGray05
+					$Table.Cell($xRow,3).Shading.BackgroundPatternColor = $wdColorGray05
+					$Table.Cell($xRow,4).Shading.BackgroundPatternColor = $wdColorGray05
+					$Table.Cell($xRow,5).Shading.BackgroundPatternColor = $wdColorGray05
+					$Table.Cell($xRow,6).Shading.BackgroundPatternColor = $wdColorGray05
+				}
+				$Table.Cell($xRow,1).Range.Font.size = 9
+				$Table.Cell($xRow,1).Range.Text = $Audit.time
+				$Tmp = ""
+				Switch([int]$Audit.action)
+				{
+					1 { $Tmp = "AddAuthGroup"}
+					2 { $Tmp = "AddCollection"}
+					3 { $Tmp = "AddDevice"}
+					4 { $Tmp = "AddDiskLocator"}
+					5 { $Tmp = "AddFarmView"}
+					6 { $Tmp = "AddServer"}
+					7 { $Tmp = "AddSite"}
+					8 { $Tmp = "AddSiteView"}
+					9 { $Tmp = "AddStore"}
+					10 { $Tmp = "AddUserGroup"}
+					11 { $Tmp = "AddVirtualHostingPool"}
+					12 { $Tmp = "AddUpdateTask"}
+					13 { $Tmp = "AddDiskUpdateDevice"}
+					1001 { $Tmp = "DeleteAuthGroup"}
+					1002 { $Tmp = "DeleteCollection"}
+					1003 { $Tmp = "DeleteDevice"}
+					1004 { $Tmp = "DeleteDeviceDiskCacheFile"}
+					1005 { $Tmp = "DeleteDiskLocator"}
+					1006 { $Tmp = "DeleteFarmView"}
+					1007 { $Tmp = "DeleteServer"}
+					1008 { $Tmp = "DeleteServerStore"}
+					1009 { $Tmp = "DeleteSite"}
+					1010 { $Tmp = "DeleteSiteView"}
+					1011 { $Tmp = "DeleteStore"}
+					1012 { $Tmp = "DeleteUserGroup"}
+					1013 { $Tmp = "DeleteVirtualHostingPool"}
+					1014 { $Tmp = "DeleteUpdateTask"}
+					1015 { $Tmp = "DeleteDiskUpdateDevice"}
+					1016 { $Tmp = "DeleteDiskVersion"}
+					2001 { $Tmp = "RunAddDeviceToDomain"}
+					2002 { $Tmp = "RunApplyAutoUpdate"}
+					2003 { $Tmp = "RunApplyIncrementalUpdate"}
+					2004 { $Tmp = "RunArchiveAuditTrail"}
+					2005 { $Tmp = "RunAssignAuthGroup"}
+					2006 { $Tmp = "RunAssignDevice"}
+					2007 { $Tmp = "RunAssignDiskLocator"}
+					2008 { $Tmp = "RunAssignServer"}
+					2009 { $Tmp = "RunBoot"}
+					2010 { $Tmp = "RunCopyPasteDevice"}
+					2011 { $Tmp = "RunCopyPasteDisk"}
+					2012 { $Tmp = "RunCopyPasteServer"}
+					2013 { $Tmp = "RunCreateDirectory"}
+					2014 { $Tmp = "RunCreateDiskCancel"}
+					2015 { $Tmp = "RunDisableCollection"}
+					2016 { $Tmp = "RunDisableDevice"}
+					2017 { $Tmp = "RunDisableDeviceDiskLocator"}
+					2018 { $Tmp = "RunDisableDiskLocator"}
+					2019 { $Tmp = "RunDisableUserGroup"}
+					2020 { $Tmp = "RunDisableUserGroupDiskLocator"}
+					2021 { $Tmp = "RunDisplayMessage"}
+					2022 { $Tmp = "RunEnableCollection"}
+					2023 { $Tmp = "RunEnableDevice"}
+					2024 { $Tmp = "RunEnableDeviceDiskLocator"}
+					2025 { $Tmp = "RunEnableDiskLocator"}
+					2026 { $Tmp = "RunEnableUserGroup"}
+					2027 { $Tmp = "RunEnableUserGroupDiskLocator"}
+					2028 { $Tmp = "RunExportOemLicenses"}
+					2029 { $Tmp = "RunImportDatabase"}
+					2030 { $Tmp = "RunImportDevices"}
+					2031 { $Tmp = "RunImportOemLicenses"}
+					2032 { $Tmp = "RunMarkDown"}
+					2033 { $Tmp = "RunReboot"}
+					2034 { $Tmp = "RunRemoveAuthGroup"}
+					2035 { $Tmp = "RunRemoveDevice"}
+					2036 { $Tmp = "RunRemoveDeviceFromDomain"}
+					2037 { $Tmp = "RunRemoveDirectory"}
+					2038 { $Tmp = "RunRemoveDiskLocator"}
+					2039 { $Tmp = "RunResetDeviceForDomain"}
+					2040 { $Tmp = "RunResetDatabaseConnection"}
+					2041 { $Tmp = "RunRestartStreamingService"}
+					2042 { $Tmp = "RunShutdown"}
+					2043 { $Tmp = "RunStartStreamingService"}
+					2044 { $Tmp = "RunStopStreamingService"}
+					2045 { $Tmp = "RunUnlockAllDisk"}
+					2046 { $Tmp = "RunUnlockDisk"}
+					2047 { $Tmp = "RunServerStoreVolumeAccess"}
+					2048 { $Tmp = "RunServerStoreVolumeMode"}
+					2049 { $Tmp = "RunMergeDisk"}
+					2050 { $Tmp = "RunRevertDiskVersion"}
+					2051 { $Tmp = "RunPromoteDiskVersion"}
+					2052 { $Tmp = "RunCancelDiskMaintenance"}
+					2053 { $Tmp = "RunActivateDevice"}
+					2054 { $Tmp = "RunAddDiskVersion"}
+					2055 { $Tmp = "RunExportDisk"}
+					2056 { $Tmp = "RunAssignDisk"}
+					2057 { $Tmp = "RunRemoveDisk"}
+					2057 { $Tmp = "RunDiskUpdateStart"}
+					2057 { $Tmp = "RunDiskUpdateCancel"}
+					2058 { $Tmp = "RunSetOverrideVersion"}
+					2059 { $Tmp = "RunCancelTask"}
+					2060 { $Tmp = "RunClearTask"}
+					3001 { $Tmp = "RunWithReturnCreateDisk"}
+					3002 { $Tmp = "RunWithReturnCreateDiskStatus"}
+					3003 { $Tmp = "RunWithReturnMapDisk"}
+					3004 { $Tmp = "RunWithReturnRebalanceDevices"}
+					3005 { $Tmp = "RunWithReturnCreateMaintenanceVersion"}
+					3006 { $Tmp = "RunWithReturnImportDisk"}
+					4001 { $Tmp = "RunByteArrayInputImportDevices"}
+					4002 { $Tmp = "RunByteArrayInputImportOemLicenses"}
+					5001 { $Tmp = "RunByteArrayOutputArchiveAuditTrail"}
+					5002 { $Tmp = "RunByteArrayOutputExportOemLicenses"}
+					6001 { $Tmp = "SetAuthGroup"}
+					6002 { $Tmp = "SetCollection"}
+					6003 { $Tmp = "SetDevice"}
+					6004 { $Tmp = "SetDisk"}
+					6005 { $Tmp = "SetDiskLocator"}
+					6006 { $Tmp = "SetFarm"}
+					6007 { $Tmp = "SetFarmView"}
+					6008 { $Tmp = "SetServer"}
+					6009 { $Tmp = "SetServerBiosBootstrap"}
+					6010 { $Tmp = "SetServerBootstrap"}
+					6011 { $Tmp = "SetServerStore"}
+					6012 { $Tmp = "SetSite"}
+					6013 { $Tmp = "SetSiteView"}
+					6014 { $Tmp = "SetStore"}
+					6015 { $Tmp = "SetUserGroup"}
+					6016 { $Tmp = "SetVirtualHostingPool"}
+					6017 { $Tmp = "SetUpdateTask"}
+					6018 { $Tmp = "SetDiskUpdateDevice"}
+					7001 { $Tmp = "SetListDeviceBootstraps"}
+					7002 { $Tmp = "SetListDeviceBootstrapsDelete"}
+					7003 { $Tmp = "SetListDeviceBootstrapsAdd"}
+					7004 { $Tmp = "SetListDeviceCustomProperty"}
+					7005 { $Tmp = "SetListDeviceCustomPropertyDelete"}
+					7006 { $Tmp = "SetListDeviceCustomPropertyAdd"}
+					7007 { $Tmp = "SetListDeviceDiskPrinters"}
+					7008 { $Tmp = "SetListDeviceDiskPrintersDelete"}
+					7009 { $Tmp = "SetListDeviceDiskPrintersAdd"}
+					7010 { $Tmp = "SetListDevicePersonality"}
+					7011 { $Tmp = "SetListDevicePersonalityDelete"}
+					7012 { $Tmp = "SetListDevicePersonalityAdd"}
+					7013 { $Tmp = "SetListDevicePortBlockerCategories"}
+					7014 { $Tmp = "SetListDevicePortBlockerCategoriesDelete"}
+					7015 { $Tmp = "SetListDevicePortBlockerCategoriesAdd"}
+					7016 { $Tmp = "SetListDevicePortBlockerOverrides"}
+					7017 { $Tmp = "SetListDevicePortBlockerOverridesDelete"}
+					7018 { $Tmp = "SetListDevicePortBlockerOverridesAdd"}
+					7019 { $Tmp = "SetListDiskLocatorCustomProperty"}
+					7020 { $Tmp = "SetListDiskLocatorCustomPropertyDelete"}
+					7021 { $Tmp = "SetListDiskLocatorCustomPropertyAdd"}
+					7022 { $Tmp = "SetListDiskLocatorPortBlockerCategories"}
+					7023 { $Tmp = "SetListDiskLocatorPortBlockerCategoriesDelete"}
+					7024 { $Tmp = "SetListDiskLocatorPortBlockerCategoriesAdd"}
+					7025 { $Tmp = "SetListDiskLocatorPortBlockerOverrides"}
+					7026 { $Tmp = "SetListDiskLocatorPortBlockerOverridesDelete"}
+					7027 { $Tmp = "SetListDiskLocatorPortBlockerOverridesAdd"}
+					7028 { $Tmp = "SetListServerCustomProperty"}
+					7029 { $Tmp = "SetListServerCustomPropertyDelete"}
+					7030 { $Tmp = "SetListServerCustomPropertyAdd"}
+					7031 { $Tmp = "SetListUserGroupCustomProperty"}
+					7032 { $Tmp = "SetListUserGroupCustomPropertyDelete"}
+					7033 { $Tmp = "SetListUserGroupCustomPropertyAdd"}				
+				}
+				$Table.Cell($xRow,2).Range.Font.size = 9
+				$Table.Cell($xRow,2).Range.Text = $Tmp
+				$Tmp = ""
+				Switch ($Audit.type)
+				{
+					0 {$Tmp = "Many"}
+					1 {$Tmp = "AuthGroup"}
+					2 {$Tmp = "Collection"}
+					3 {$Tmp = "Device"}
+					4 {$Tmp = "Disk"}
+					5 {$Tmp = "DeskLocator"}
+					6 {$Tmp = "Farm"}
+					7 {$Tmp = "FarmView"}
+					8 {$Tmp = "Server"}
+					9 {$Tmp = "Site"}
+					10 {$Tmp = "SiteView"}
+					11 {$Tmp = "Store"}
+					12 {$Tmp = "System"}
+					13 {$Tmp = "UserGroup"}
+					Default { {$Tmp = "Undefined"}}
+				}
+				$Table.Cell($xRow,3).Range.Font.size = 9
+				$Table.Cell($xRow,3).Range.Text = $Tmp
+				$Table.Cell($xRow,4).Range.Font.size = 9
+				$Table.Cell($xRow,4).Range.Text = $Audit.objectName
+				$Table.Cell($xRow,5).Range.Font.size = 9
+				$Table.Cell($xRow,5).Range.Text = $Audit.userName
+				$Table.Cell($xRow,6).Range.Font.size = 9
+				$Table.Cell($xRow,6).Range.Text = $Audit.path
+			}
+			$table.AutoFitBehavior(1)
+
+			#return focus back to document
+			Write-Verbose "$(Get-Date): `t`tReturn focus back to document"
+			$doc.ActiveWindow.ActivePane.view.SeekView=$wdSeekMainDocument
+
+			#move to the end of the current document
+			Write-Verbose "$(Get-Date): `tMove to the end of the current document"
+			$selection.EndKey($wdStory,$wdMove) | Out-Null
+			Write-Verbose "$(Get-Date):"
 		}
 	}
 }
