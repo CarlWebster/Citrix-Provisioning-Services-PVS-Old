@@ -82,7 +82,7 @@
 .PARAMETER Password
 	Specifies the password used for the AdminAddress connection. 
 .EXAMPLE
-	PS C:\PSScript > .\PVS_Inventory_V4.ps1
+	PS C:\PSScript > .\PVS_Inventory_V41.ps1
 	
 	Will use all Default values.
 	HKEY_CURRENT_USER\Software\Microsoft\Office\Common\UserInfo\Company="Carl Webster"
@@ -94,7 +94,7 @@
 	Administrator for the User Name.
 	LocalHost for AdminAddress.
 .EXAMPLE
-	PS C:\PSScript > .\PVS_Inventory_V4.ps1 -verbose
+	PS C:\PSScript > .\PVS_Inventory_V41.ps1 -verbose
 	
 	Will use all Default values.
 	HKEY_CURRENT_USER\Software\Microsoft\Office\Common\UserInfo\Company="Carl Webster"
@@ -107,7 +107,7 @@
 	LocalHost for AdminAddress.
 	Will display verbose messages as the script is running.
 .EXAMPLE
-	PS C:\PSScript > .\PVS_Inventory_V4.ps1 -PDF -verbose
+	PS C:\PSScript > .\PVS_Inventory_V41.ps1 -PDF -verbose
 	
 	Will use all Default values and save the document as a PDF file.
 	HKEY_CURRENT_USER\Software\Microsoft\Office\Common\UserInfo\Company="Carl Webster"
@@ -120,7 +120,7 @@
 	LocalHost for AdminAddress.
 	Will display verbose messages as the script is running.
 .EXAMPLE
-	PS C:\PSScript > .\PVS_Inventory_V4.ps1 -Hardware -verbose
+	PS C:\PSScript > .\PVS_Inventory_V41.ps1 -Hardware -verbose
 	
 	Will use all Default values and add additional information for each server about its hardware.
 	HKEY_CURRENT_USER\Software\Microsoft\Office\Common\UserInfo\CompanyName="Carl Webster" or
@@ -132,14 +132,14 @@
 	Administrator for the User Name.
 	Will display verbose messages as the script is running.
 .EXAMPLE
-	PS C:\PSScript .\PVS_Inventory_V4.ps1 -CompanyName "Carl Webster Consulting" -CoverPage "Mod" -UserName "Carl Webster"
+	PS C:\PSScript .\PVS_Inventory_V41.ps1 -CompanyName "Carl Webster Consulting" -CoverPage "Mod" -UserName "Carl Webster"
 
 	Will use:
 		Carl Webster Consulting for the Company Name.
 		Mod for the Cover Page format.
 		Carl Webster for the User Name.
 .EXAMPLE
-	PS C:\PSScript .\PVS_Inventory_V4.ps1 -CN "Carl Webster Consulting" -CP "Mod" -UN "Carl Webster" -AdminAddress PVS1
+	PS C:\PSScript .\PVS_Inventory_V41.ps1 -CN "Carl Webster Consulting" -CP "Mod" -UN "Carl Webster" -AdminAddress PVS1
 
 	Will use:
 		Carl Webster Consulting for the Company Name (alias CN).
@@ -147,7 +147,7 @@
 		Carl Webster for the User Name (alias UN).
 		PVS1 for AdminAddress.
 .EXAMPLE
-	PS C:\PSScript .\PVS_Inventory_V4.ps1 -CN "Carl Webster Consulting" -CP "Mod" -UN "Carl Webster" -AdminAddress PVS1 -User cwebster -Domain WebstersLab -Password Abc123!@#
+	PS C:\PSScript .\PVS_Inventory_V41.ps1 -CN "Carl Webster Consulting" -CP "Mod" -UN "Carl Webster" -AdminAddress PVS1 -User cwebster -Domain WebstersLab -Password Abc123!@#
 
 	Will use:
 		Carl Webster Consulting for the Company Name (alias CN).
@@ -158,7 +158,7 @@
 		WebstersLab for Domain.
 		Abc123!@# for Password.
 .EXAMPLE
-	PS C:\PSScript .\PVS_Inventory_V4.ps1 -CN "Carl Webster Consulting" -CP "Mod" -UN "Carl Webster" -AdminAddress PVS1 -User cwebster
+	PS C:\PSScript .\PVS_Inventory_V41.ps1 -CN "Carl Webster Consulting" -CP "Mod" -UN "Carl Webster" -AdminAddress PVS1 -User cwebster
 
 	Will use:
 		Carl Webster Consulting for the Company Name (alias CN).
@@ -170,12 +170,12 @@
 .INPUTS
 	None.  You cannot pipe objects to this script.
 .OUTPUTS
-	No objects are output from this script.  This script creates a Word document.
+	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
-	NAME: PVS_Inventory_V4.ps1
-	VERSION: 4.01
+	NAME: PVS_Inventory_V41.ps1
+	VERSION: 4.11
 	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith and Jeff Wouters)
-	LASTEDIT: November 12, 2013
+	LASTEDIT: January 28, 2014
 #>
 
 
@@ -281,6 +281,15 @@ $PSDefaultParameterValues = @{"*:Verbose"=$True}
 #	Verify Word object is created.  If not, write error and suggestion to document and abort script
 #Updated 12-Nov-2013
 #	Added back in the French sections that somehow got removed
+#Version 4.1 Updates and fixes:
+#	Added additional error checking when retrieving Network Interface WMI data
+#	Added help text to show the script produces a Word or PDF document
+#	Changed to using $PSCulture for Word culture setting
+#	Don't abort script if Cover Page is not found
+#Version 4.11
+#	Fixed the formatting of three lines
+#	Test to see if server is online before process bootstrap files
+
 
 Set-StrictMode -Version 2
 
@@ -324,70 +333,70 @@ $hash = @{}
 #pt - Portuguese
 #sv - Swedish
 
-Switch ($PSUICulture.Substring(0,3))
+Switch ($PSCulture.Substring(0,3))
 {
 	'ca-'	{
-			$hash.($($PSUICulture)) = @{
+			$hash.($($PSCulture)) = @{
 				'Word_TableOfContents' = 'Taula automática 2';
 			}
 		}
 
 	'da-'	{
-			$hash.($($PSUICulture)) = @{
+			$hash.($($PSCulture)) = @{
 				'Word_TableOfContents' = 'Automatisk tabel 2';
 			}
 		}
 
 	'de-'	{
-			$hash.($($PSUICulture)) = @{
+			$hash.($($PSCulture)) = @{
 				'Word_TableOfContents' = 'Automatische Tabelle 2';
 			}
 		}
 
 	'en-'	{
-			$hash.($($PSUICulture)) = @{
+			$hash.($($PSCulture)) = @{
 				'Word_TableOfContents'  = 'Automatic Table 2';
 			}
 		}
 
 	'es-'	{
-			$hash.($($PSUICulture)) = @{
+			$hash.($($PSCulture)) = @{
 				'Word_TableOfContents' = 'Tabla automática 2';
 			}
 		}
 
 	'fi-'	{
-			$hash.($($PSUICulture)) = @{
+			$hash.($($PSCulture)) = @{
 				'Word_TableOfContents' = 'Automaattinen taulukko 2';
 			}
 		}
 
 	'fr-'	{
-			$hash.($($PSUICulture)) = @{
+			$hash.($($PSCulture)) = @{
 				'Word_TableOfContents' = 'Sommaire Automatique 2';
 			}
 		}
 
 	'nb-'	{
-			$hash.($($PSUICulture)) = @{
+			$hash.($($PSCulture)) = @{
 				'Word_TableOfContents' = 'Automatisk tabell 2';
 			}
 		}
 
 	'nl-'	{
-			$hash.($($PSUICulture)) = @{
+			$hash.($($PSCulture)) = @{
 				'Word_TableOfContents' = 'Automatische inhoudsopgave 2';
 			}
 		}
 
 	'pt-'	{
-			$hash.($($PSUICulture)) = @{
+			$hash.($($PSCulture)) = @{
 				'Word_TableOfContents' = 'Sumário Automático 2';
 			}
 		}
 
 	'sv-'	{
-			$hash.($($PSUICulture)) = @{
+			$hash.($($PSCulture)) = @{
 				'Word_TableOfContents' = 'Automatisk innehållsförteckning2';
 			}
 		}
@@ -406,7 +415,7 @@ $wdStyleHeading4 = -5
 $wdStyleNoSpacing = -158
 $wdTableGrid = -155
 
-$myHash = $hash.$PSUICulture
+$myHash = $hash.$PSCulture
 
 If($myHash -eq $Null)
 {
@@ -426,7 +435,7 @@ Function ValidateCoverPage
 	
 	$xArray = ""
 	
-	Switch ($PSUICulture.Substring(0,3))
+	Switch ($PSCulture.Substring(0,3))
 	{
 		'ca-'	{
 				If($xWordVersion -eq $wdWord2013)
@@ -913,7 +922,8 @@ Function GetComputerWMIInfo
 	Try
 	{
 		$Results = Get-WmiObject -computername $RemoteComputerName win32_networkadapterconfiguration 
-		$Nics = $Results| where {$_.ipenabled -eq $True}
+		$Nics = $Results | where {$_.ipenabled -eq $True}
+		$Results = $Null
 	}
 	
 	Catch
@@ -924,6 +934,15 @@ Function GetComputerWMIInfo
 		WriteWordLine 0 0 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
 		WriteWordLine 0 0 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository and winmgmt /salvagerepository"
 	}
+
+	If( $Nics -eq $Null ) 
+	{ 
+		$GotNics = $False 
+	} 
+	Else 
+	{ 
+		$GotNics = !($Nics.__PROPERTY_COUNT -eq 0) 
+	} 
 	
 	If($GotNics)
 	{
@@ -1200,10 +1219,10 @@ Function DeviceStatus
 	{
 		WriteWordLine 0 3 "Target device active"
 		WriteWordLine 0 3 "IP Address`t`t: " $xDevice.ip
-		WriteWordLine 0 3 "Server`t`t: " -nonewline
+		WriteWordLine 0 3 "Server`t`t`t: " -nonewline
 		WriteWordLine 0 0 "$($xDevice.serverName) `($($xDevice.serverIpConnection)`: $($xDevice.serverPortConnection)`)"
-		WriteWordLine 0 3 "Retries`t`t: " $xDevice.status
-		WriteWordLine 0 3 "vDisk`t`t: " $xDevice.diskLocatorName
+		WriteWordLine 0 3 "Retries`t`t`t: " $xDevice.status
+		WriteWordLine 0 3 "vDisk`t`t`t: " $xDevice.diskLocatorName
 		WriteWordLine 0 3 "vDisk version`t`t: " $xDevice.diskVersion
 		WriteWordLine 0 3 "vDisk name`t`t: " $xDevice.diskFileName
 		WriteWordLine 0 3 "vDisk access`t`t: " -nonewline
@@ -1611,7 +1630,7 @@ If([String]::IsNullOrEmpty($CompanyName))
 
 Write-Verbose "$(Get-Date): Check Default Cover Page for language specific version"
 [bool]$CPChanged = $False
-Switch ($PSUICulture.Substring(0,3))
+Switch ($PSCulture.Substring(0,3))
 {
 	'ca-'	{
 			If($CoverPage -eq "Sideline")
@@ -1783,9 +1802,8 @@ If($BuildingBlocks -ne $Null)
 If(!$CoverPagesExist)
 {
 	Write-Verbose "$(Get-Date): Cover Pages are not installed or the Cover Page $($CoverPage) does not exist."
-	Write-Error "Cover Pages are not installed or the Cover Page $($CoverPage) does not exist.  Script cannot continue."
-	Write-Verbose "$(Get-Date): Closing Word"
-	AbortScript
+	Write-Warning "Cover Pages are not installed or the Cover Page $($CoverPage) does not exist."
+	Write-Warning "This report will not have a Cover Page."
 }
 
 Write-Verbose "$(Get-Date): Create empty word doc"
@@ -2431,163 +2449,171 @@ ForEach($PVSSite in $PVSSites)
 	WriteWordLine 2 0 "Configure Bootstrap settings"
 	ForEach($Server in $Servers)
 	{
-		Write-Verbose "$(Get-Date): `t`t`t`tProcessing Bootstrap files for Server $($server.servername)"
-		#first get all bootstrap files for the server
-		$temp = $server.serverName
-		$GetWhat = "ServerBootstrapNames"
-		$GetParam = "serverName = $temp"
-		$ErrorTxt = "Server Bootstrap Name information"
-		$BootstrapNames = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-
-		#Now that the list of bootstrap names has been gathered
-		#We have the mandatory parameter to get the bootstrap info
-		#there should be at least one bootstrap filename
-		WriteWordLine 3 0 $Server.serverName
-		If($Bootstrapnames -ne $Null)
+		Write-Verbose "$(Get-Date): `t`t`tTesting to see if $($server.ServerName) is online and reachable"
+		If(Test-Connection -ComputerName $server.servername -quiet -EA 0)
 		{
-			#cannot use the BuildPVSObject Function here
-			$serverbootstraps = @()
-			ForEach($Bootstrapname in $Bootstrapnames)
+			Write-Verbose "$(Get-Date): `t`t`t`tProcessing Bootstrap files for Server $($server.servername)"
+			#first get all bootstrap files for the server
+			$temp = $server.serverName
+			$GetWhat = "ServerBootstrapNames"
+			$GetParam = "serverName = $temp"
+			$ErrorTxt = "Server Bootstrap Name information"
+			$BootstrapNames = BuildPVSObject $GetWhat $GetParam $ErrorTxt
+
+			#Now that the list of bootstrap names has been gathered
+			#We have the mandatory parameter to get the bootstrap info
+			#there should be at least one bootstrap filename
+			WriteWordLine 3 0 $Server.serverName
+			If($Bootstrapnames -ne $Null)
 			{
-				#get serverbootstrap info
-				$error.Clear()
-				$tempserverbootstrap = Mcli-Get ServerBootstrap -p name="$($Bootstrapname.name)",servername="$($server.serverName)"
-				If($error.Count -eq 0)
+				#cannot use the BuildPVSObject Function here
+				$serverbootstraps = @()
+				ForEach($Bootstrapname in $Bootstrapnames)
 				{
-					$serverbootstrap = $Null
-					ForEach($record in $tempserverbootstrap)
+					#get serverbootstrap info
+					$error.Clear()
+					$tempserverbootstrap = Mcli-Get ServerBootstrap -p name="$($Bootstrapname.name)",servername="$($server.serverName)"
+					If($error.Count -eq 0)
 					{
-						If($record.length -gt 5 -and $record.substring(0,6) -eq "Record")
+						$serverbootstrap = $Null
+						ForEach($record in $tempserverbootstrap)
 						{
-							If($serverbootstrap -ne $Null)
+							If($record.length -gt 5 -and $record.substring(0,6) -eq "Record")
 							{
-								$serverbootstraps +=  $serverbootstrap
-							}
-							$serverbootstrap = new-object System.Object
-							#add the bootstrapname name value to the serverbootstrap object
-							$property = "BootstrapName"
-							$value = $Bootstrapname.name
-							Add-Member -inputObject $serverbootstrap -MemberType NoteProperty -Name $property -Value $value
-						}
-						$index = $record.IndexOf(':')
-						If($index -gt 0)
-						{
-							$property = $record.SubString(0, $index)
-							$value = $record.SubString($index + 2)
-							If($property -ne "Executing")
-							{
+								If($serverbootstrap -ne $Null)
+								{
+									$serverbootstraps +=  $serverbootstrap
+								}
+								$serverbootstrap = new-object System.Object
+								#add the bootstrapname name value to the serverbootstrap object
+								$property = "BootstrapName"
+								$value = $Bootstrapname.name
 								Add-Member -inputObject $serverbootstrap -MemberType NoteProperty -Name $property -Value $value
 							}
+							$index = $record.IndexOf(':')
+							If($index -gt 0)
+							{
+								$property = $record.SubString(0, $index)
+								$value = $record.SubString($index + 2)
+								If($property -ne "Executing")
+								{
+									Add-Member -inputObject $serverbootstrap -MemberType NoteProperty -Name $property -Value $value
+								}
+							}
 						}
+						$serverbootstraps +=  $serverbootstrap
 					}
-					$serverbootstraps +=  $serverbootstrap
+					Else
+					{
+						WriteWordLine 0 0 "Server Bootstrap information could not be retrieved"
+						WriteWordLine 0 0 "Error returned is " $error[0].FullyQualifiedErrorId.Split(',')[0].Trim()
+					}
+				}
+				If($ServerBootstraps -ne $Null)
+				{
+					Write-Verbose "$(Get-Date): `t`t`t`t`tProcessing Bootstrap file $($ServerBootstrap.Bootstrapname)"
+					Write-Verbose "$(Get-Date): `t`t`t`t`t`tProcessing General Tab"
+					WriteWordLine 0 1 "General"	
+					ForEach($ServerBootstrap in $ServerBootstraps)
+					{
+						WriteWordLine 0 2 "Bootstrap file`t: " $ServerBootstrap.Bootstrapname
+						If($ServerBootstrap.bootserver1_Ip -ne "0.0.0.0")
+						{
+							WriteWordLine 0 2 "IP Address`t: " $ServerBootstrap.bootserver1_Ip
+							WriteWordLine 0 2 "Subnet Mask`t: " $ServerBootstrap.bootserver1_Netmask
+							WriteWordLine 0 2 "Gateway`t: " $ServerBootstrap.bootserver1_Gateway
+							WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver1_Port
+						}
+						If($ServerBootstrap.bootserver2_Ip -ne "0.0.0.0")
+						{
+							WriteWordLine 0 2 "IP Address`t: " $ServerBootstrap.bootserver2_Ip
+							WriteWordLine 0 2 "Subnet Mask`t: " $ServerBootstrap.bootserver2_Netmask
+							WriteWordLine 0 2 "Gateway`t: " $ServerBootstrap.bootserver2_Gateway
+							WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver2_Port
+						}
+						If($ServerBootstrap.bootserver3_Ip -ne "0.0.0.0")
+						{
+							WriteWordLine 0 2 "IP Address`t: " $ServerBootstrap.bootserver3_Ip
+							WriteWordLine 0 2 "Subnet Mask`t: " $ServerBootstrap.bootserver3_Netmask
+							WriteWordLine 0 2 "Gateway`t: " $ServerBootstrap.bootserver3_Gateway
+							WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver3_Port
+						}
+						If($ServerBootstrap.bootserver4_Ip -ne "0.0.0.0")
+						{
+							WriteWordLine 0 2 "IP Address`t: " $ServerBootstrap.bootserver4_Ip
+							WriteWordLine 0 2 "Subnet Mask`t: " $ServerBootstrap.bootserver4_Netmask
+							WriteWordLine 0 2 "Gateway`t: " $ServerBootstrap.bootserver4_Gateway
+							WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver4_Port
+						}
+						WriteWordLine 0 0 ""
+					}
+				}
+				Write-Verbose "$(Get-Date): `t`t`t`t`t`tProcessing Options Tab"
+				WriteWordLine 0 1 "Options"
+				WriteWordLine 0 2 "Verbose mode`t`t`t: " -nonewline
+				If($ServerBootstrap.verboseMode -eq "1")
+				{
+					WriteWordLine 0 0 "Yes"
 				}
 				Else
 				{
-					WriteWordLine 0 0 "Server Bootstrap information could not be retrieved"
-					WriteWordLine 0 0 "Error returned is " $error[0].FullyQualifiedErrorId.Split(',')[0].Trim()
+					WriteWordLine 0 0 "No"
 				}
-			}
-			If($ServerBootstraps -ne $Null)
-			{
-				Write-Verbose "$(Get-Date): `t`t`t`t`tProcessing Bootstrap file $($ServerBootstrap.Bootstrapname)"
-				Write-Verbose "$(Get-Date): `t`t`t`t`t`tProcessing General Tab"
-				WriteWordLine 0 1 "General"	
-				ForEach($ServerBootstrap in $ServerBootstraps)
+				WriteWordLine 0 2 "Interrupt safe mode`t`t: " -nonewline
+				If($ServerBootstrap.interruptSafeMode -eq "1")
 				{
-					WriteWordLine 0 2 "Bootstrap file`t: " $ServerBootstrap.Bootstrapname
-					If($ServerBootstrap.bootserver1_Ip -ne "0.0.0.0")
-					{
-						WriteWordLine 0 2 "IP Address`t: " $ServerBootstrap.bootserver1_Ip
-						WriteWordLine 0 2 "Subnet Mask`t: " $ServerBootstrap.bootserver1_Netmask
-						WriteWordLine 0 2 "Gateway`t: " $ServerBootstrap.bootserver1_Gateway
-						WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver1_Port
-					}
-					If($ServerBootstrap.bootserver2_Ip -ne "0.0.0.0")
-					{
-						WriteWordLine 0 2 "IP Address`t: " $ServerBootstrap.bootserver2_Ip
-						WriteWordLine 0 2 "Subnet Mask`t: " $ServerBootstrap.bootserver2_Netmask
-						WriteWordLine 0 2 "Gateway`t: " $ServerBootstrap.bootserver2_Gateway
-						WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver2_Port
-					}
-					If($ServerBootstrap.bootserver3_Ip -ne "0.0.0.0")
-					{
-						WriteWordLine 0 2 "IP Address`t: " $ServerBootstrap.bootserver3_Ip
-						WriteWordLine 0 2 "Subnet Mask`t: " $ServerBootstrap.bootserver3_Netmask
-						WriteWordLine 0 2 "Gateway`t: " $ServerBootstrap.bootserver3_Gateway
-						WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver3_Port
-					}
-					If($ServerBootstrap.bootserver4_Ip -ne "0.0.0.0")
-					{
-						WriteWordLine 0 2 "IP Address`t: " $ServerBootstrap.bootserver4_Ip
-						WriteWordLine 0 2 "Subnet Mask`t: " $ServerBootstrap.bootserver4_Netmask
-						WriteWordLine 0 2 "Gateway`t: " $ServerBootstrap.bootserver4_Gateway
-						WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver4_Port
-					}
-					WriteWordLine 0 0 ""
+					WriteWordLine 0 0 "Yes"
+				}
+				Else
+				{
+					WriteWordLine 0 0 "No"
+				}
+				WriteWordLine 0 2 "Advanced Memory Support`t: " -nonewline
+				If($ServerBootstrap.paeMode -eq "1")
+				{
+					WriteWordLine 0 0 "Yes"
+				}
+				Else
+				{
+					WriteWordLine 0 0 "No"
+				}
+				WriteWordLine 0 2 "Network recovery method`t: " -nonewline
+				If($ServerBootstrap.bootFromHdOnFail -eq "0")
+				{
+					WriteWordLine 0 0 "Restore network connection"
+				}
+				Else
+				{
+					WriteWordLine 0 0 "Reboot to Hard Drive after $($ServerBootstrap.recoveryTime) seconds"
+				}
+				WriteWordLine 0 2 "Timeouts"
+				WriteWordLine 0 3 "Login polling timeout`t: " -nonewline
+				If($ServerBootstrap.pollingTimeout -eq "")
+				{
+					WriteWordLine 0 0 "5000 (milliseconds)"
+				}
+				Else
+				{
+					WriteWordLine 0 0 "$($ServerBootstrap.pollingTimeout) (milliseconds)"
+				}
+				WriteWordLine 0 3 "Login general timeout`t: " -nonewline
+				If($ServerBootstrap.generalTimeout -eq "")
+				{
+					WriteWordLine 0 0 "5000 (milliseconds)"
+				}
+				Else
+				{
+					WriteWordLine 0 0 "$($ServerBootstrap.generalTimeout) (milliseconds)"
 				}
 			}
-			Write-Verbose "$(Get-Date): `t`t`t`t`t`tProcessing Options Tab"
-			WriteWordLine 0 1 "Options"
-			WriteWordLine 0 2 "Verbose mode`t`t`t: " -nonewline
-			If($ServerBootstrap.verboseMode -eq "1")
-			{
-				WriteWordLine 0 0 "Yes"
-			}
 			Else
 			{
-				WriteWordLine 0 0 "No"
-			}
-			WriteWordLine 0 2 "Interrupt safe mode`t`t: " -nonewline
-			If($ServerBootstrap.interruptSafeMode -eq "1")
-			{
-				WriteWordLine 0 0 "Yes"
-			}
-			Else
-			{
-				WriteWordLine 0 0 "No"
-			}
-			WriteWordLine 0 2 "Advanced Memory Support`t: " -nonewline
-			If($ServerBootstrap.paeMode -eq "1")
-			{
-				WriteWordLine 0 0 "Yes"
-			}
-			Else
-			{
-				WriteWordLine 0 0 "No"
-			}
-			WriteWordLine 0 2 "Network recovery method`t: " -nonewline
-			If($ServerBootstrap.bootFromHdOnFail -eq "0")
-			{
-				WriteWordLine 0 0 "Restore network connection"
-			}
-			Else
-			{
-				WriteWordLine 0 0 "Reboot to Hard Drive after $($ServerBootstrap.recoveryTime) seconds"
-			}
-			WriteWordLine 0 2 "Timeouts"
-			WriteWordLine 0 3 "Login polling timeout`t: " -nonewline
-			If($ServerBootstrap.pollingTimeout -eq "")
-			{
-				WriteWordLine 0 0 "5000 (milliseconds)"
-			}
-			Else
-			{
-				WriteWordLine 0 0 "$($ServerBootstrap.pollingTimeout) (milliseconds)"
-			}
-			WriteWordLine 0 3 "Login general timeout`t: " -nonewline
-			If($ServerBootstrap.generalTimeout -eq "")
-			{
-				WriteWordLine 0 0 "5000 (milliseconds)"
-			}
-			Else
-			{
-				WriteWordLine 0 0 "$($ServerBootstrap.generalTimeout) (milliseconds)"
+				WriteWordLine 0 2 "No Bootstrap names available"
 			}
 		}
 		Else
 		{
-			WriteWordLine 0 2 "No Bootstrap names available"
+			Write-Verbose "$(Get-Date): `t`t`t`tServer $($server.servername) is offline"
 		}
 	}		
 
