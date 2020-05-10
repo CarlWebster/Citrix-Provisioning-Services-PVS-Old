@@ -115,8 +115,8 @@
 .PARAMETER AddDateTime
 	Adds a date time stamp to the end of the file name.
 	Time stamp is in the format of yyyy-MM-dd_HHmm.
-	June 1, 2014 at 6PM is 2014-06-01_1800.
-	Output filename will be ReportName_2014-06-01_1800.docx (or .pdf).
+	June 1, 2020 at 6PM is 2020-06-01_1800.
+	Output filename will be ReportName_2020-06-01_1800.docx (or .pdf).
 	This parameter is disabled by default.
 .PARAMETER Folder
 	Specifies the optional output folder to save the output report. 
@@ -206,7 +206,7 @@
 		cwebster for User.
 		Script will prompt for the Domain and Password
 .EXAMPLE
-	PS C:\PSScript > .\PVS_Inventory_V42.ps1 -StartDate "01/01/2014" -EndDate "01/31/2014" 
+	PS C:\PSScript > .\PVS_Inventory_V42.ps1 -StartDate "01/01/2020" -EndDate "01/31/2020" 
 	
 	Will use all Default values.
 	HKEY_CURRENT_USER\Software\Microsoft\Office\Common\UserInfo\Company="Carl Webster"
@@ -217,7 +217,7 @@
 	Sideline for the Cover Page format.
 	Administrator for the User Name.
 	LocalHost for AdminAddress.
-	Will return all Audit Trail entries from "01/01/2014" through "01/31/2014".
+	Will return all Audit Trail entries from "01/01/2020" through "01/31/2020".
 .EXAMPLE
 	PS C:\PSScript > .\PVS_Inventory_V42.ps1 -AdminAddress PVS1 -Folder \\FileServer\ShareName
 	
@@ -268,9 +268,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: PVS_Inventory_V42.ps1
-	VERSION: 4.29
-	AUTHOR: Carl Webster, Sr. Solutions Architect at Choice Solutions (with a lot of help from Michael B. Smith, Jeff Wouters and Iain Brighton)
-	LASTEDIT: April 7, 2018
+	VERSION: 4.291
+	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith, Jeff Wouters and Iain Brighton)
+	LASTEDIT: December 17, 2019
 #>
 
 
@@ -353,14 +353,58 @@ Param(
 	)
 
 
-#Carl Webster, CTP and Sr. Solutions Architect at Choice Solutions
+#Created by Carl Webster
 #webster@carlwebster.com
 #@carlwebster on Twitter
-#http://www.CarlWebster.com
+#https://www.CarlWebster.com
 #This script written for "Benji", March 19, 2012
-#Thanks to Michael B. Smith, Joe Shonk and Stephane Thirion
-#for testing and fine-tuning tips 
+#Thanks to Michael B. Smith, Joe Shonk and Stephane Thirion for testing and fine-tuning tips 
 
+#Version 4.291 17-Dec-2019
+#	Fix Swedish Table of Contents (Thanks to Johan Kallio)
+#		From 
+#			'sv-'	{ 'Automatisk innehållsförteckning2'; Break }
+#		To
+#			'sv-'	{ 'Automatisk innehållsförteckn2'; Break }
+#	Updated help text
+#
+#Version 4.29 7-Apr-2018
+#	Added Operating System information to Functions GetComputerWMIInfo and OutputComputerItem
+#	Code clean up from Visual Studio Code
+#Version 4.28 13-Feb-2017
+#	Fixed French wording for Table of Contents 2 (Thanks to David Rouquier)
+#
+#Version 4.27 7-Nov-2016
+#	Added Chinese language support
+#
+#Version 4.26 12-Sep-2016
+#	Added an alias AA for AdminAddress to match the other scripts that use AdminAddress
+#	If remoting is used (-AdminAddress), check if the script is being run elevated. If not,
+#		show the script needs elevation and end the script
+#	Added Break statements to most of the Switch statements
+#	Added checking the NIC's "Allow the computer to turn off this device to save power" setting
+#	Remove all references to TEXT and HTML output as those are in the 5.xx script
+#
+#Version 4.25 8-Feb-2016
+#	Added specifying an optional output folder
+#	Added the option to email the output file
+#	Fixed several spacing and typo errors
+#
+#Version 4.24 4-Dec-2015
+#	Added RAM usage for Cache to Device RAM with Overflow to Disk option
+#
+#Version 4.23 5-Oct-2015
+#	Added support for Word 2016
+#
+#Version 4.22
+#	Fixed processing of the Options tab for ServerBootstrap files
+#
+#Version 4.21
+#	Add writeCacheType 9 (Cache to Device RAM with overflow to hard disk) for PVS 7.x
+#	Remove writeCacheType 3 and 5 from PVS 6 and 7
+#	Updated help text
+#	Updated hardware inventory code
+#
 #Version 4.2
 #	Cleanup the script's parameters section
 #	Code cleanup and standardization with the master template script
@@ -381,43 +425,6 @@ Param(
 #	Move audit trail info to new table functions
 #	Add parameters for MSWord, Text and HTML for future updates
 #
-#Version 4.21
-#	Add writeCacheType 9 (Cache to Device RAM with overflow to hard disk) for PVS 7.x
-#	Remove writeCacheType 3 and 5 from PVS 6 and 7
-#	Updated help text
-#	Updated hardware inventory code
-#
-#Version 4.22
-#	Fixed processing of the Options tab for ServerBootstrap files
-#
-#Version 4.23 5-Oct-2015
-#	Added support for Word 2016
-#
-#Version 4.24 4-Dec-2015
-#	Added RAM usage for Cache to Device RAM with Overflow to Disk option
-#
-#Version 4.25 8-Feb-2016
-#	Added specifying an optional output folder
-#	Added the option to email the output file
-#	Fixed several spacing and typo errors
-#
-#Version 4.26 12-Sep-2016
-#	Added an alias AA for AdminAddress to match the other scripts that use AdminAddress
-#	If remoting is used (-AdminAddress), check if the script is being run elevated. If not,
-#		show the script needs elevation and end the script
-#	Added Break statements to most of the Switch statements
-#	Added checking the NIC's "Allow the computer to turn off this device to save power" setting
-#	Remove all references to TEXT and HTML output as those are in the 5.xx script
-#
-#Version 4.27 7-Nov-2016
-#	Added Chinese language support
-#
-#Version 4.28 13-Feb-2017
-#	Fixed French wording for Table of Contents 2 (Thanks to David Rouquier)
-#
-#Version 4.29 7-Apr-2018
-#	Added Operating System information to Functions GetComputerWMIInfo and OutputComputerItem
-#	Code clean up from Visual Studio Code
 
 Set-StrictMode -Version 2
 
@@ -1435,7 +1442,8 @@ Function SetWordHashTable
 			'nb-'	{ 'Automatisk tabell 2'; Break }
 			'nl-'	{ 'Automatische inhoudsopgave 2'; Break }
 			'pt-'	{ 'Sumário Automático 2'; Break }
-			'sv-'	{ 'Automatisk innehållsförteckning2'; Break }
+			# fix in 4.291 thanks to Johan Kallio 'sv-'	{ 'Automatisk innehållsförteckning2'; Break }
+			'sv-'	{ 'Automatisk innehållsförteckn2'; Break }
 			'zh-'	{ '自动目录 2'; Break }
 		}
 	)
@@ -6056,3 +6064,9 @@ Write-Verbose "$(Get-Date): Elapsed time: $($Str)"
 $runtime = $Null
 $Str = $Null
 $ErrorActionPreference = $SaveEAPreference
+
+Write-Host "                                                                                    " -BackgroundColor Black -ForegroundColor White
+Write-Host "               This FREE script was brought to you by Conversant Group              " -BackgroundColor Black -ForegroundColor White
+Write-Host "We design, build, and manage infrastructure for a secure, dependable user experience" -BackgroundColor Black -ForegroundColor White
+Write-Host "                       Visit our website conversantgroup.com                        " -BackgroundColor Black -ForegroundColor White
+Write-Host "                                                                                    " -BackgroundColor Black -ForegroundColor White
