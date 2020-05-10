@@ -50,26 +50,32 @@
 	User name to use for the Cover Page and Footer.
 	Default value is contained in $env:username
 	This parameter has an alias of UN.
+.PARAMETER AdminAddress
+	Specifies the name of a PVS server that the PowerShell script will connect to. 
 .EXAMPLE
 	PS C:\PSScript > .\PVS_Inventory_v2.ps1
 	
 	Will use all default values.
 	HKEY_CURRENT_USER\Software\Microsoft\Office\Common\UserInfo\Company="Carl Webster"
 	$env:username = Administrator
+	AdminAddress = LocalHost
 
 	Carl Webster for the Company Name.
 	Motion for the Cover Page format.
 	Administrator for the User Name.
+	LocalHost for AdminAddress.
 .EXAMPLE
 	PS C:\PSScript > .\PVS_Inventory_v2.ps1 -verbose
 	
 	Will use all default values.
 	HKEY_CURRENT_USER\Software\Microsoft\Office\Common\UserInfo\Company="Carl Webster"
 	$env:username = Administrator
+	AdminAddress = LocalHost
 
 	Carl Webster for the Company Name.
 	Motion for the Cover Page format.
 	Administrator for the User Name.
+	LocalHost for AdminAddress.
 	Will display verbose messages as the script is running.
 .EXAMPLE
 	PS C:\PSScript .\PVS_Inventory_v2.ps1 -CompanyName "Carl Webster Consulting" -CoverPage "Mod" -UserName "Carl Webster"
@@ -79,12 +85,13 @@
 		Mod for the Cover Page format.
 		Carl Webster for the User Name.
 .EXAMPLE
-	PS C:\PSScript .\PVS_Inventory_v2.ps1 -CN "Carl Webster Consulting" -CP "Mod" -UN "Carl Webster"
+	PS C:\PSScript .\PVS_Inventory_v2.ps1 -CN "Carl Webster Consulting" -CP "Mod" -UN "Carl Webster" -AdminAddress PVS1
 
 	Will use:
 		Carl Webster Consulting for the Company Name (alias CN).
 		Mod for the Cover Page format (alias CP).
 		Carl Webster for the User Name (alias UN).
+		PVS1 for AdminAddress.
 .INPUTS
 	None.  You cannot pipe objects to this script.
 .OUTPUTS
@@ -93,9 +100,9 @@
 	http://www.carlwebster.com/documenting-a-citrix-provisioning-services-farm-with-microsoft-powershell-and-word-version-2
 .NOTES
 	NAME: PVS_Inventory_V2.ps1
-	VERSION: 2
+	VERSION: 2.01
 	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith and Jeff Wouters)
-	LASTEDIT: March 16, 2013
+	LASTEDIT: April 21, 2013
 #>
 
 
@@ -123,7 +130,16 @@ Param([parameter(
 	] 
 	[Alias("UN")]
 	[ValidateNotNullOrEmpty()]
-	[string]$UserName=$env:username )
+	[string]$UserName=$env:username,
+		
+	[parameter(
+	Position = 3, 
+	Mandatory=$false )
+	] 
+	[string]$AdminAddress="")
+
+
+Set-StrictMode -Version 2
 
 #Carl Webster, CTP and independent consultant
 #webster@carlwebster.com
@@ -144,6 +160,9 @@ Param([parameter(
 #	?{?_.SessionId -eq $SessionID} should have been ?{$_.SessionId -eq $SessionID} in the CheckWordPrereq function
 #Updated March 16, 2013
 #	Fixed hard coded "6.5" in report subject.  Copy and Paste error from the XenApp 6.5 script.
+#Updated April 19, 2013
+#	Fixed the content of and the detail contained in the Table of Contents
+#	Fixed a compatibility issue with the way the Word file was saved and Set-StrictMode -Version 2
 
 Function CheckWordPrereq
 {
@@ -456,6 +475,24 @@ if (!(Check-NeededPSSnapins "McliPSSnapIn")){
 
 CheckWordPreReq
 
+#setup remoting if $AdminAddress is not empty
+If( $AdminAddress -ne "" )
+{
+	$error.Clear()
+	mcli-run SetupConnection -p server=$AdminAddress
+	If( $error.Count -eq 0 )
+	{
+		Write-Verbose "This script is being run remotely against server $($AdminAddress)"
+	}
+	Else 
+	{
+		Write-Warning "Remoting could not be setup to server  $($AdminAddress)"
+		Write-Warning "Error returned is " $error[0].FullyQualifiedErrorId.Split(',')[0].Trim()
+		Write-Warning "Script cannot continue"
+		Exit
+	}
+}
+
 #get PVS major version
 write-verbose "Getting PVS version info"
 
@@ -478,11 +515,11 @@ If( $error.Count -eq 0 )
 } 
 Else 
 {
-	WriteWordLine 0 0 "PVS version information could not be retrieved"
-	WriteWordLine 0 0 "Error returned is " $error[0].FullyQualifiedErrorId.Split(',')[0].Trim()
+	Write-Warning "PVS version information could not be retrieved"
+	Write-Warning "Error returned is " $error[0].FullyQualifiedErrorId.Split(',')[0].Trim()
 	Write-error "Script is terminating"
 	#without version info, script should not proceed
-	Break
+	Exit
 }
 
 $PVSVersion     = $Version.mapiVersion.SubString(0,1)
@@ -525,7 +562,6 @@ $wdColorGray15 = 14277081
 # Setup word for output
 write-verbose "Create Word comObject.  If you are not running Word 2007, ignore the next message."
 $Word = New-Object -comobject "Word.Application"
-[ref]$SaveFormat = "microsoft.office.interop.word.WdSaveFormat" -as [type] 
 $WordVersion = [int] $Word.Version
 If( $WordVersion -eq 15)
 {
@@ -941,7 +977,8 @@ ForEach($PVSSite in $PVSSites)
 		write-verbose "Processing Server $($Server.serverName)"
 		#general tab
 		write-verbose "Processing General Tab"
-		WriteWordLine 3 0 "Server Properties"
+		WriteWordLine 3 0 $Server.serverName
+		WriteWordLine 0 0 "Server Properties"
 		WriteWordLine 0 1 "General"
 		WriteWordLine 0 2 "Name`t`t: " $Server.serverName
 		If(![String]::IsNullOrEmpty($Server.description))
@@ -1150,6 +1187,7 @@ ForEach($PVSSite in $PVSSites)
 
 	#Configure Bootstrap is first
 	write-verbose "Processing Bootstrap files"
+	WriteWordLine 2 0 "Configure Bootstrap settings"
 	ForEach($Server in $Servers)
 	{
 		write-verbose "Processing Bootstrap files for Server $($server.servername)"
@@ -1163,7 +1201,7 @@ ForEach($PVSSite in $PVSSites)
 		#Now that the list of bootstrap names has been gathered
 		#We have the mandatory parameter to get the bootstrap info
 		#there should be at least one bootstrap filename
-		WriteWordLine 2 0 "Configure Bootstrap settings for server " $Server.serverName
+		WriteWordLine 3 0 $Server.serverName
 		If($Bootstrapnames -ne $null)
 		{
 			#cannot use the BuildPVSObject function here
@@ -1326,6 +1364,7 @@ ForEach($PVSSite in $PVSSites)
 		{
 			write-verbose "Processing vDisk $($Disk.diskLocatorName)"
 			write-verbose "Processing Properties General Tab"
+			WriteWordLine 3 0 $Disk.diskLocatorName
 			If($PVSVersion -eq "5")
 			{
 				#PVS 5.x
@@ -1742,10 +1781,12 @@ ForEach($PVSSite in $PVSSites)
 			$vHosts = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 			If($vHosts -ne $null)
 			{
+				WriteWordLine 3 0 "Hosts"
 				ForEach($vHost in $vHosts)
 				{
 					Write-verbose "Processing virtual host $($vHost.virtualHostingPoolName)"
 					write-verbose "Processing General Tab"
+					WriteWordLine 4 0 $vHost.virtualHostingPoolName
 					WriteWordLine 0 2 "General"
 					WriteWordLine 0 3 "Type`t`t: " -nonewline
 					switch ($vHost.type)
@@ -1781,10 +1822,12 @@ ForEach($PVSSite in $PVSSites)
 			$ManagedvDisks = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 			If($ManagedvDisks -ne $null)
 			{
+				WriteWordLine 3 0 "vDisks"
 				ForEach($ManagedvDisk in $ManagedvDisks)
 				{
 					write-verbose "Processing Managed vDisk $($ManagedvDisk.storeName)`\$($ManagedvDisk.disklocatorName)"
 					write-verbose "Processing General Tab"
+					WriteWordLine 4 0 "$($ManagedvDisk.storeName)`\$($ManagedvDisk.disklocatorName)"
 					WriteWordLine 0 2 "General"
 					WriteWordLine 0 3 "vDisk`t`t: " "$($ManagedvDisk.storeName)`\$($ManagedvDisk.disklocatorName)"
 					WriteWordLine 0 3 "Virtual Host Connection: " 
@@ -1837,186 +1880,189 @@ ForEach($PVSSite in $PVSSites)
 				}
 			}
 			
-			ForEach($Task in $Tasks)
+			If($Taskss -ne $null)
 			{
-				write-verbose "Processing Task $($Task.updateTaskName)"
-				write-verbose "Processing General Tab"
-				WriteWordLine 0 1 "Tasks"
-				WriteWordLine 0 2 "General"
-				WriteWordLine 0 3 "Name`t`t: " $Task.updateTaskName
-				If(![String]::IsNullOrEmpty($Task.description))
+				ForEach($Task in $Tasks)
 				{
-					WriteWordLine 0 3 "Description`t: " $Task.description
-				}
-				WriteWordLine 0 3 "Disable this task: " -nonewline
-				If($Task.enabled -eq "1")
-				{
-					WriteWordLine 0 0 "No"
-				}
-				Else
-				{
-					WriteWordLine 0 0 "Yes"
-				}
-				write-verbose "Processing Schedule Tab"
-				WriteWordLine 0 2 "Schedule"
-				WriteWordLine 0 3 "Recurrence: " -nonewline
-				switch ($Task.recurrence)
-				{
-					0 {WriteWordLine 0 0 "None"}
-					1 {WriteWordLine 0 0 "Daily Everyday"}
-					2 {WriteWordLine 0 0 "Daily Weekdays only"}
-					3 {WriteWordLine 0 0 "Weekly"}
-					4 {WriteWordLine 0 0 "Monthly Date"}
-					5 {WriteWordLine 0 0 "Monthly Type"}
-					Default {WriteWordLine 0 0 "Recurrence type could not be determined: $($Task.recurrence)"}
-				}
-				If($Task.recurrence -ne "0")
-				{
-					$AMorPM = "AM"
-					$NumHour = [int]$Task.Hour
-					If($NumHour -ge 0 -and $NumHour -lt 12)
+					write-verbose "Processing Task $($Task.updateTaskName)"
+					write-verbose "Processing General Tab"
+					WriteWordLine 0 1 "Tasks"
+					WriteWordLine 0 2 "General"
+					WriteWordLine 0 3 "Name`t`t: " $Task.updateTaskName
+					If(![String]::IsNullOrEmpty($Task.description))
+					{
+						WriteWordLine 0 3 "Description`t: " $Task.description
+					}
+					WriteWordLine 0 3 "Disable this task: " -nonewline
+					If($Task.enabled -eq "1")
+					{
+						WriteWordLine 0 0 "No"
+					}
+					Else
+					{
+						WriteWordLine 0 0 "Yes"
+					}
+					write-verbose "Processing Schedule Tab"
+					WriteWordLine 0 2 "Schedule"
+					WriteWordLine 0 3 "Recurrence: " -nonewline
+					switch ($Task.recurrence)
+					{
+						0 {WriteWordLine 0 0 "None"}
+						1 {WriteWordLine 0 0 "Daily Everyday"}
+						2 {WriteWordLine 0 0 "Daily Weekdays only"}
+						3 {WriteWordLine 0 0 "Weekly"}
+						4 {WriteWordLine 0 0 "Monthly Date"}
+						5 {WriteWordLine 0 0 "Monthly Type"}
+						Default {WriteWordLine 0 0 "Recurrence type could not be determined: $($Task.recurrence)"}
+					}
+					If($Task.recurrence -ne "0")
 					{
 						$AMorPM = "AM"
-					}
-					Else
-					{
-						$AMorPM = "PM"
-					}
-					If($NumHour -eq 0)
-					{
-						$NumHour += 12
-					}
-					Else
-					{
-						$NumHour -= 12
-					}
-					$StrHour = [string]$NumHour
-					If($StrHour.length -lt 2)
-					{
-						$StrHour = "0" + $StrHour
-					}
-					$tempMinute = ""
-					If($Task.Minute.length -lt 2)
-					{
-						$tempMinute = "0" + $Task.Minute
-					}
-					WriteWordLine 0 3 "Run the update at $($StrHour)`:$($tempMinute) $($AMorPM)"
-				}
-				If($Task.recurrence -eq "3")
-				{
-					$dayMask = @{
-						1 = "Sunday"
-						2 = "Monday";
-						4 = "Tuesday";
-						8 = "Wednesday";
-						16 = "Thursday";
-						32 = "Friday";
-						64 = "Saturday"}
-					For( $i = 1; $i -le 128; $i = $i * 2 )
-					{
-						If( ( $Task.dayMask -band $i ) -ne 0 )
+						$NumHour = [int]$Task.Hour
+						If($NumHour -ge 0 -and $NumHour -lt 12)
 						{
-							WriteWordLine 0 4 $dayMask.$i
+							$AMorPM = "AM"
+						}
+						Else
+						{
+							$AMorPM = "PM"
+						}
+						If($NumHour -eq 0)
+						{
+							$NumHour += 12
+						}
+						Else
+						{
+							$NumHour -= 12
+						}
+						$StrHour = [string]$NumHour
+						If($StrHour.length -lt 2)
+						{
+							$StrHour = "0" + $StrHour
+						}
+						$tempMinute = ""
+						If($Task.Minute.length -lt 2)
+						{
+							$tempMinute = "0" + $Task.Minute
+						}
+						WriteWordLine 0 3 "Run the update at $($StrHour)`:$($tempMinute) $($AMorPM)"
+					}
+					If($Task.recurrence -eq "3")
+					{
+						$dayMask = @{
+							1 = "Sunday"
+							2 = "Monday";
+							4 = "Tuesday";
+							8 = "Wednesday";
+							16 = "Thursday";
+							32 = "Friday";
+							64 = "Saturday"}
+						For( $i = 1; $i -le 128; $i = $i * 2 )
+						{
+							If( ( $Task.dayMask -band $i ) -ne 0 )
+							{
+								WriteWordLine 0 4 $dayMask.$i
+							}
 						}
 					}
-				}
-				If($Task.recurrence -eq "4")
-				{
-					WriteWordLine 0 3 "On Date " $Task.date
-				}
-				If($Task.recurrence -eq "5")
-				{
-					WriteWordLine 0 3 "On " -nonewline
-					switch($Task.monthlyOffset)
+					If($Task.recurrence -eq "4")
 					{
-						1 {WriteWordLine 0 0 "First " -nonewline}
-						2 {WriteWordLine 0 0 "Second " -nonewline}
-						3 {WriteWordLine 0 0 "Third " -nonewline}
-						4 {WriteWordLine 0 0 "Fourth " -nonewline}
-						5 {WriteWordLine 0 0 "Last " -nonewline}
-						Default {WriteWordLine 0 0 "Monthly Offset could not be determined: $($Task.monthlyOffset)"}
+						WriteWordLine 0 3 "On Date " $Task.date
 					}
-					$dayMask = @{
-						1 = "Sunday"
-						2 = "Monday";
-						4 = "Tuesday";
-						8 = "Wednesday";
-						16 = "Thursday";
-						32 = "Friday";
-						64 = "Saturday";
-						128 = "Weekday"}
-					For( $i = 1; $i -le 128; $i = $i * 2 )
+					If($Task.recurrence -eq "5")
 					{
-						If( ( $Task.dayMask -band $i ) -ne 0 )
+						WriteWordLine 0 3 "On " -nonewline
+						switch($Task.monthlyOffset)
 						{
-							WriteWordLine 0 0 $dayMask.$i
+							1 {WriteWordLine 0 0 "First " -nonewline}
+							2 {WriteWordLine 0 0 "Second " -nonewline}
+							3 {WriteWordLine 0 0 "Third " -nonewline}
+							4 {WriteWordLine 0 0 "Fourth " -nonewline}
+							5 {WriteWordLine 0 0 "Last " -nonewline}
+							Default {WriteWordLine 0 0 "Monthly Offset could not be determined: $($Task.monthlyOffset)"}
+						}
+						$dayMask = @{
+							1 = "Sunday"
+							2 = "Monday";
+							4 = "Tuesday";
+							8 = "Wednesday";
+							16 = "Thursday";
+							32 = "Friday";
+							64 = "Saturday";
+							128 = "Weekday"}
+						For( $i = 1; $i -le 128; $i = $i * 2 )
+						{
+							If( ( $Task.dayMask -band $i ) -ne 0 )
+							{
+								WriteWordLine 0 0 $dayMask.$i
+							}
 						}
 					}
-				}
-				
-				write-verbose "Processing vDisks Tab"
-				WriteWordLine 0 2 "vDisks"
-				WriteWordLine 0 3 "vDisks to be updated by this task:"
-				$Temp = $ManagedvDisk.deviceId
-				$GetWhat = "diskUpdateDevice"
-				$GetParam = "deviceId=$Temp"
-				$ErrorTxt = "Device Info information"
-				$vDisks = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-				If($vDisks -ne $null)
-				{
-					ForEach($vDisk in $vDisks)
+					
+					write-verbose "Processing vDisks Tab"
+					WriteWordLine 0 2 "vDisks"
+					WriteWordLine 0 3 "vDisks to be updated by this task:"
+					$Temp = $ManagedvDisk.deviceId
+					$GetWhat = "diskUpdateDevice"
+					$GetParam = "deviceId=$Temp"
+					$ErrorTxt = "Device Info information"
+					$vDisks = BuildPVSObject $GetWhat $GetParam $ErrorTxt
+					If($vDisks -ne $null)
 					{
-						WriteWordLine 0 4 "vDisk`t: " -nonewline
-						WriteWordLine 0 0 "$($vDisk.storeName)`\$($vDisk.diskLocatorName)"
-						WriteWordLine 0 4 "Host`t: " $vDisk.virtualHostingPoolName
-						WriteWordLine 0 4 "VM`t: " $vDisk.deviceName
-						WriteWordLine 0 0 ""
+						ForEach($vDisk in $vDisks)
+						{
+							WriteWordLine 0 4 "vDisk`t: " -nonewline
+							WriteWordLine 0 0 "$($vDisk.storeName)`\$($vDisk.diskLocatorName)"
+							WriteWordLine 0 4 "Host`t: " $vDisk.virtualHostingPoolName
+							WriteWordLine 0 4 "VM`t: " $vDisk.deviceName
+							WriteWordLine 0 0 ""
+						}
 					}
-				}
-				
-				write-verbose "Processing ESD Tab"
-				WriteWordLine 0 2 "ESD"
-				WriteWordLine 0 3 "ESD client to use: " -nonewline
-				switch($Task.esdType)
-				{
-					""     {WriteWordLine 0 0 "None (runs a custom script on the client)"}
-					"WSUS" {WriteWordLine 0 0 "Microsoft Windows Update Service (WSUS)"}
-					"SCCM" {WriteWordLine 0 0 "Microsoft System Center Configuration Manager (SCCM)"}
-					Default {WriteWordLine 0 0 "ESD Client could not be determined: $($Task.esdType)"}
-				}
-				
-				write-verbose "Processing Scripts Tab"
-				If(![String]::IsNullOrEmpty($Task.preUpdateScript) -or ![String]::IsNullOrEmpty($Task.preVmScript) -or ![String]::IsNullOrEmpty($Task.postVmScript) -or ![String]::IsNullOrEmpty($Task.postUpdateScript))
-				{
-					WriteWordLine 0 2 "Scripts"
-					WriteWordLine 0 3 "Scripts that execute with the vDisk update processing:"
-					If(![String]::IsNullOrEmpty($Task.preUpdateScript))
+					
+					write-verbose "Processing ESD Tab"
+					WriteWordLine 0 2 "ESD"
+					WriteWordLine 0 3 "ESD client to use: " -nonewline
+					switch($Task.esdType)
 					{
-						WriteWordLine 0 3 "Pre-update script`t: " $Task.preUpdateScript
+						""     {WriteWordLine 0 0 "None (runs a custom script on the client)"}
+						"WSUS" {WriteWordLine 0 0 "Microsoft Windows Update Service (WSUS)"}
+						"SCCM" {WriteWordLine 0 0 "Microsoft System Center Configuration Manager (SCCM)"}
+						Default {WriteWordLine 0 0 "ESD Client could not be determined: $($Task.esdType)"}
 					}
-					If(![String]::IsNullOrEmpty($Task.preVmScript))
+					
+					write-verbose "Processing Scripts Tab"
+					If(![String]::IsNullOrEmpty($Task.preUpdateScript) -or ![String]::IsNullOrEmpty($Task.preVmScript) -or ![String]::IsNullOrEmpty($Task.postVmScript) -or ![String]::IsNullOrEmpty($Task.postUpdateScript))
 					{
-						WriteWordLine 0 3 "Pre-startup script`t: " $Task.preVmScript
+						WriteWordLine 0 2 "Scripts"
+						WriteWordLine 0 3 "Scripts that execute with the vDisk update processing:"
+						If(![String]::IsNullOrEmpty($Task.preUpdateScript))
+						{
+							WriteWordLine 0 3 "Pre-update script`t: " $Task.preUpdateScript
+						}
+						If(![String]::IsNullOrEmpty($Task.preVmScript))
+						{
+							WriteWordLine 0 3 "Pre-startup script`t: " $Task.preVmScript
+						}
+						If(![String]::IsNullOrEmpty($Task.postVmScript))
+						{
+							WriteWordLine 0 3 "Post-shutdown script`t: " $Task.postVmScript
+						}
+						If(![String]::IsNullOrEmpty($Task.postUpdateScript))
+						{
+							WriteWordLine 0 3 "Post-update script`t: " $Task.postUpdateScript
+						}
 					}
-					If(![String]::IsNullOrEmpty($Task.postVmScript))
+					
+					write-verbose "Processing Access Tab"
+					WriteWordLine 0 2 "Access"
+					WriteWordLine 0 3 "Upon successful completion, access assigned to the vDisk: " -nonewline
+					switch($Task.postUpdateApprove)
 					{
-						WriteWordLine 0 3 "Post-shutdown script`t: " $Task.postVmScript
+						0 {WriteWordLine 0 0 "Production"}
+						1 {WriteWordLine 0 0 "Test"}
+						2 {WriteWordLine 0 0 "Maintenance"}
+						Default {WriteWordLine 0 0 "Access method for vDisk could not be determined: $($Task.postUpdateApprove)"}
 					}
-					If(![String]::IsNullOrEmpty($Task.postUpdateScript))
-					{
-						WriteWordLine 0 3 "Post-update script`t: " $Task.postUpdateScript
-					}
-				}
-				
-				write-verbose "Processing Access Tab"
-				WriteWordLine 0 2 "Access"
-				WriteWordLine 0 3 "Upon successful completion, access assigned to the vDisk: " -nonewline
-				switch($Task.postUpdateApprove)
-				{
-					0 {WriteWordLine 0 0 "Production"}
-					1 {WriteWordLine 0 0 "Test"}
-					2 {WriteWordLine 0 0 "Maintenance"}
-					Default {WriteWordLine 0 0 "Access method for vDisk could not be determined: $($Task.postUpdateApprove)"}
 				}
 			}
 		}
@@ -2024,7 +2070,6 @@ ForEach($PVSSite in $PVSSites)
 
 	#process all device collections in site
 	write-verbose "Processing all device collections in site"
-	WriteWordLine 2 0 "Device Collections"
 	$Temp = $PVSSite.SiteName
 	$GetWhat = "Collection"
 	$GetParam = "siteName=$Temp"
@@ -2033,10 +2078,12 @@ ForEach($PVSSite in $PVSSites)
 
 	If($Collections -ne $null)
 	{
+		WriteWordLine 2 0 "Device Collections"
 		ForEach($Collection in $Collections)
 		{
 			write-verbose "Processing Collection $($Collection.collectionName)"
 			write-verbose "Processing General Tab"
+			WriteWordLine 3 0 $Collection.collectionName
 			WriteWordLine 0 1 "General"
 			If(![String]::IsNullOrEmpty($Collection.description))
 			{
@@ -2367,6 +2414,7 @@ ForEach($PVSSite in $PVSSites)
 		{
 			write-verbose "Processing Site View $($SiteView.siteViewName)"
 			write-verbose "Processing General Tab"
+			WriteWordLine 3 0 $SiteView.siteViewName
 			WriteWordLine 0 1 "View Properties"
 			WriteWordLine 0 2 "General"
 			If(![String]::IsNullOrEmpty($SiteView.description))
@@ -2430,6 +2478,7 @@ If($FarmViews -ne $null)
 	{
 		write-verbose "Processing Farm View $($FarmView.farmViewName)"
 		write-verbose "Processing General Tab"
+		WriteWordLine 2 0 $FarmView.farmViewName
 		WriteWordLine 0 1 "View Properties"
 		WriteWordLine 0 2 "General"
 		If(![String]::IsNullOrEmpty($FarmView.description))
@@ -2480,6 +2529,7 @@ If($Stores -ne $null)
 	{
 		write-verbose "Processing Store $($Store.StoreName)"
 		write-verbose "Processing General Tab"
+		WriteWordLine 2 0 $Store.StoreName
 		WriteWordLine 0 1 "General"
 		WriteWordLine 0 2 "Name`t`t: " $Store.StoreName
 		If(![String]::IsNullOrEmpty($Store.description))
@@ -2587,14 +2637,22 @@ write-verbose "Save and Close document and Shutdown Word"
 If ($WordVersion -eq 12)
 {
 	#Word 2007
-	$doc.SaveAs($filename, $SaveFormat::wdFormatDocument)
+	$SaveFormat = "microsoft.office.interop.word.WdSaveFormat" -as [type] 
+	$doc.SaveAs($filename, $SaveFormat)
 }
 Else
 {
-	$doc.SaveAs([REF]$filename, [ref]$SaveFormat::wdFormatDocument)
+	#the $saveFormat below passes StrictMode 2
+	#I found this at the following two links
+	#http://blogs.technet.com/b/bshukla/archive/2011/09/27/3347395.aspx
+	#http://msdn.microsoft.com/en-us/library/microsoft.office.interop.word.wdsaveformat(v=office.14).aspx
+	$saveFormat = [Enum]::Parse([Microsoft.Office.Interop.Word.WdSaveFormat], "wdFormatDocumentDefault")
+	$doc.SaveAs([REF]$filename, [ref]$SaveFormat)
 }
 
 $doc.Close()
 $Word.Quit()
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Word) | out-null
+Remove-Variable -Name word
 [gc]::collect() 
 [gc]::WaitForPendingFinalizers()
