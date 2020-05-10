@@ -52,6 +52,12 @@
 	This parameter has an alias of UN.
 .PARAMETER AdminAddress
 	Specifies the name of a PVS server that the PowerShell script will connect to. 
+.PARAMETER User
+	Specifies the user used for the AdminAddress connection. 
+.PARAMETER Domain
+	Specifies the domain used for the AdminAddress connection. 
+.PARAMETER Password
+	Specifies the password used for the AdminAddress connection. 
 .EXAMPLE
 	PS C:\PSScript > .\PVS_Inventory_v2.ps1
 	
@@ -92,6 +98,27 @@
 		Mod for the Cover Page format (alias CP).
 		Carl Webster for the User Name (alias UN).
 		PVS1 for AdminAddress.
+.EXAMPLE
+	PS C:\PSScript .\PVS_Inventory_v2.ps1 -CN "Carl Webster Consulting" -CP "Mod" -UN "Carl Webster" -AdminAddress PVS1 -User cwebster -Domain WebstersLab -Password Abc123!@#
+
+	Will use:
+		Carl Webster Consulting for the Company Name (alias CN).
+		Mod for the Cover Page format (alias CP).
+		Carl Webster for the User Name (alias UN).
+		PVS1 for AdminAddress.
+		cwebster for User.
+		WebstersLab for Domain.
+		Abc123!@# for Password.
+.EXAMPLE
+	PS C:\PSScript .\PVS_Inventory_v2.ps1 -CN "Carl Webster Consulting" -CP "Mod" -UN "Carl Webster" -AdminAddress PVS1 -User cwebster
+
+	Will use:
+		Carl Webster Consulting for the Company Name (alias CN).
+		Mod for the Cover Page format (alias CP).
+		Carl Webster for the User Name (alias UN).
+		PVS1 for AdminAddress.
+		cwebster for User.
+		Script will prompt for the Domain and Password
 .INPUTS
 	None.  You cannot pipe objects to this script.
 .OUTPUTS
@@ -100,9 +127,9 @@
 	http://www.carlwebster.com/documenting-a-citrix-provisioning-services-farm-with-microsoft-powershell-and-word-version-2
 .NOTES
 	NAME: PVS_Inventory_V2.ps1
-	VERSION: 2.02
+	VERSION: 2.03
 	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith and Jeff Wouters)
-	LASTEDIT: June 7, 2013
+	LASTEDIT: June 17, 2013
 #>
 
 
@@ -136,8 +163,25 @@ Param([parameter(
 	Position = 3, 
 	Mandatory=$false )
 	] 
-	[string]$AdminAddress="")
+	[string]$AdminAddress="",
 
+	[parameter(
+	Position = 4, 
+	Mandatory=$false )
+	] 
+	[string]$User="",
+
+	[parameter(
+	Position = 5, 
+	Mandatory=$false )
+	] 
+	[string]$Domain="",
+
+	[parameter(
+	Position = 6, 
+	Mandatory=$false )
+	] 
+	[string]$Password="")
 
 Set-StrictMode -Version 2
 
@@ -164,7 +208,9 @@ Set-StrictMode -Version 2
 #	Fixed the content of and the detail contained in the Table of Contents
 #	Fixed a compatibility issue with the way the Word file was saved and Set-StrictMode -Version 2
 #Updated June 7, 2013
-#	Added for PVS 6.x processing the vDisk Load Balancing menu
+#	Added for PVS 6.x processing the vDisk Load Balancing menu (bug found by Corey Tracey)
+#Updated June 17, 2013
+#	Added three command line parameters for use with -AdminAddress (User, Domain, Password) at the request of Corey Tracey
 
 
 Function CheckWordPrereq
@@ -479,17 +525,40 @@ if (!(Check-NeededPSSnapins "McliPSSnapIn")){
 CheckWordPreReq
 
 #setup remoting if $AdminAddress is not empty
-If( $AdminAddress -ne "" )
+If(![System.String]::IsNullOrEmpty( $AdminAddress ))
 {
-	$error.Clear()
-	mcli-run SetupConnection -p server=$AdminAddress
+	If(![System.String]::IsNullOrEmpty( $User ))
+	{
+		If([System.String]::IsNullOrEmpty( $Domain ))
+		{
+			$Domain = Read-Host "Domain name for user is required.  Enter Domain name for user"
+		}		
+
+		If([System.String]::IsNullOrEmpty( $Password ))
+		{
+			$Password = Read-Host "Password for user is required.  Enter password for user"
+		}		
+		$error.Clear()
+		mcli-run SetupConnection -p server="$($AdminAddress)",user="$($User)",domain="$($Domain)",password="$($Password)"
+	}
+	Else
+	{
+		$error.Clear()
+		mcli-run SetupConnection -p server="$($AdminAddress)"
+	}
+
 	If( $error.Count -eq 0 )
 	{
 		Write-Verbose "This script is being run remotely against server $($AdminAddress)"
+		If(![System.String]::IsNullOrEmpty( $User ))
+		{
+			Write-Verbose "User=$($User)"
+			Write-Verbose "Domain=$($Domain)"
+		}
 	}
 	Else 
 	{
-		Write-Warning "Remoting could not be setup to server  $($AdminAddress)"
+		Write-Warning "Remoting could not be setup to server $($AdminAddress)"
 		Write-Warning "Error returned is " $error[0].FullyQualifiedErrorId.Split(',')[0].Trim()
 		Write-Warning "Script cannot continue"
 		Exit
