@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-	Creates a complete inventory of a Citrix PVS 5.x, 6.x farm using Microsoft Word.
+	Creates a complete inventory of a Citrix PVS 5.x, 6.x, 7.x farm using Microsoft Word.
 .DESCRIPTION
-	Creates a complete inventory of a Citrix PVS 5.x, 6.x farm using Microsoft Word and PowerShell.
-	Creates a Word document named after the PVS 5.x, 6.x farm.
+	Creates a complete inventory of a Citrix PVS 5.x, 6.x, 7.x farm using Microsoft Word and PowerShell.
+	Creates a Word document named after the PVS 5.x, 6.x, 7.x farm.
 	Document includes a Cover Page, Table of Contents and Footer.
 .PARAMETER CompanyName
 	Company Name to use for the Cover Page.  
@@ -59,7 +59,7 @@
 .PARAMETER Password
 	Specifies the password used for the AdminAddress connection. 
 .EXAMPLE
-	PS C:\PSScript > .\PVS_Inventory_v2.ps1
+	PS C:\PSScript > .\PVS_Inventory_V3.ps1
 	
 	Will use all default values.
 	HKEY_CURRENT_USER\Software\Microsoft\Office\Common\UserInfo\Company="Carl Webster"
@@ -71,7 +71,7 @@
 	Administrator for the User Name.
 	LocalHost for AdminAddress.
 .EXAMPLE
-	PS C:\PSScript > .\PVS_Inventory_v2.ps1 -verbose
+	PS C:\PSScript > .\PVS_Inventory_V3.ps1 -verbose
 	
 	Will use all default values.
 	HKEY_CURRENT_USER\Software\Microsoft\Office\Common\UserInfo\Company="Carl Webster"
@@ -84,14 +84,14 @@
 	LocalHost for AdminAddress.
 	Will display verbose messages as the script is running.
 .EXAMPLE
-	PS C:\PSScript .\PVS_Inventory_v2.ps1 -CompanyName "Carl Webster Consulting" -CoverPage "Mod" -UserName "Carl Webster"
+	PS C:\PSScript .\PVS_Inventory_V3.ps1 -CompanyName "Carl Webster Consulting" -CoverPage "Mod" -UserName "Carl Webster"
 
 	Will use:
 		Carl Webster Consulting for the Company Name.
 		Mod for the Cover Page format.
 		Carl Webster for the User Name.
 .EXAMPLE
-	PS C:\PSScript .\PVS_Inventory_v2.ps1 -CN "Carl Webster Consulting" -CP "Mod" -UN "Carl Webster" -AdminAddress PVS1
+	PS C:\PSScript .\PVS_Inventory_V3.ps1 -CN "Carl Webster Consulting" -CP "Mod" -UN "Carl Webster" -AdminAddress PVS1
 
 	Will use:
 		Carl Webster Consulting for the Company Name (alias CN).
@@ -99,7 +99,7 @@
 		Carl Webster for the User Name (alias UN).
 		PVS1 for AdminAddress.
 .EXAMPLE
-	PS C:\PSScript .\PVS_Inventory_v2.ps1 -CN "Carl Webster Consulting" -CP "Mod" -UN "Carl Webster" -AdminAddress PVS1 -User cwebster -Domain WebstersLab -Password Abc123!@#
+	PS C:\PSScript .\PVS_Inventory_V3.ps1 -CN "Carl Webster Consulting" -CP "Mod" -UN "Carl Webster" -AdminAddress PVS1 -User cwebster -Domain WebstersLab -Password Abc123!@#
 
 	Will use:
 		Carl Webster Consulting for the Company Name (alias CN).
@@ -110,7 +110,7 @@
 		WebstersLab for Domain.
 		Abc123!@# for Password.
 .EXAMPLE
-	PS C:\PSScript .\PVS_Inventory_v2.ps1 -CN "Carl Webster Consulting" -CP "Mod" -UN "Carl Webster" -AdminAddress PVS1 -User cwebster
+	PS C:\PSScript .\PVS_Inventory_V3.ps1 -CN "Carl Webster Consulting" -CP "Mod" -UN "Carl Webster" -AdminAddress PVS1 -User cwebster
 
 	Will use:
 		Carl Webster Consulting for the Company Name (alias CN).
@@ -126,10 +126,10 @@
 .LINK
 	http://www.carlwebster.com/documenting-a-citrix-provisioning-services-farm-with-microsoft-powershell-and-word-version-2
 .NOTES
-	NAME: PVS_Inventory_V2.ps1
-	VERSION: 2.03
+	NAME: PVS_Inventory_V3.ps1
+	VERSION: 3.0
 	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith and Jeff Wouters)
-	LASTEDIT: June 17, 2013
+	LASTEDIT: July 18, 2013
 #>
 
 
@@ -184,6 +184,7 @@ Param([parameter(
 	[string]$Password="")
 
 Set-StrictMode -Version 2
+$ScriptVersion = "3.0"
 
 #Carl Webster, CTP and independent consultant
 #webster@carlwebster.com
@@ -211,6 +212,12 @@ Set-StrictMode -Version 2
 #	Added for PVS 6.x processing the vDisk Load Balancing menu (bug found by Corey Tracey)
 #Updated June 17, 2013
 #	Added three command line parameters for use with -AdminAddress (User, Domain, Password) at the request of Corey Tracey
+#Version 3 created July 18, 2013
+#     Added support for PVS7
+#	Many typos corrected
+#	Several logic errors fixed
+#	Added setting default tab stops at 36 points (1/2 inch in the USA)
+#	Realigned a lot of items so the ":"s line up better
 
 
 Function CheckWordPrereq
@@ -294,15 +301,15 @@ Function DeviceStatus
 	}
 	Else
 	{
-		WriteWordLine 0 2 "Target device active"
-		WriteWordLine 0 2 "IP Address: " $xDevice.ip
-		WriteWordLine 0 2 "Server: " -nonewline
+		WriteWordLine 0 3 "Target device active"
+		WriteWordLine 0 3 "IP Address`t`t: " $xDevice.ip
+		WriteWordLine 0 3 "Server`t`t: " -nonewline
 		WriteWordLine 0 0 "$($xDevice.serverName) `($($xDevice.serverIpConnection)`: $($xDevice.serverPortConnection)`)"
-		WriteWordLine 0 2 "Retries: " $xDevice.status
-		WriteWordLine 0 2 "vDisk: " $xDevice.diskLocatorName
-		WriteWordLine 0 2 "vDisk version: " $xDevice.diskVersion
-		WriteWordLine 0 2 "vDisk full name: " $xDevice.diskFileName
-		WriteWordLine 0 2 "vDisk access: " -nonewline
+		WriteWordLine 0 3 "Retries`t`t: " $xDevice.status
+		WriteWordLine 0 3 "vDisk`t`t: " $xDevice.diskLocatorName
+		WriteWordLine 0 3 "vDisk version`t`t: " $xDevice.diskVersion
+		WriteWordLine 0 3 "vDisk name`t`t: " $xDevice.diskFileName
+		WriteWordLine 0 3 "vDisk access`t`t: " -nonewline
 		switch ($xDevice.diskVersionAccess)
 		{
 			0 {WriteWordLine 0 0 "Production"}
@@ -311,19 +318,30 @@ Function DeviceStatus
 			3 {WriteWordLine 0 0 "Personal vDisk"}
 			Default {WriteWordLine 0 0 "vDisk access type could not be determined: $($xDevice.diskVersionAccess)"}
 		}
+		If($PVSVersion -eq "7")
+		{
+			WriteWordLine 0 3 "Local write cache disk`t:$($xDevice.localWriteCacheDiskSize)GB"
+			WriteWordLine 0 3 "Boot mode`t`t:" -nonewline
+			switch($xDevice.bdmBoot)
+			{
+				0 {WriteWordLine 0 0 "PXE boot"}
+				1 {WriteWordLine 0 0 "BDM disk"}
+				Default {WriteWordLine 0 0 "Boot mode could not be determined: $($xDevice.bdmBoot)"}
+			}
+		}
 		switch($xDevice.licenseType)
 		{
-			0 {WriteWordLine 0 2 "No License"}
-			1 {WriteWordLine 0 2 "Desktop License"}
-			2 {WriteWordLine 0 2 "Server License"}
-			5 {WriteWordLine 0 2 "OEM SmartClient License"}
-			6 {WriteWordLine 0 2 "XenApp License"}
-			7 {WriteWordLine 0 2 "XenDesktop License"}
-			Default {WriteWordLine 0 2 "Device license type could not be determined: $($xDevice.licenseType)"}
+			0 {WriteWordLine 0 3 "No License"}
+			1 {WriteWordLine 0 3 "Desktop License"}
+			2 {WriteWordLine 0 3 "Server License"}
+			5 {WriteWordLine 0 3 "OEM SmartClient License"}
+			6 {WriteWordLine 0 3 "XenApp License"}
+			7 {WriteWordLine 0 3 "XenDesktop License"}
+			Default {WriteWordLine 0 0 "Device license type could not be determined: $($xDevice.licenseType)"}
 		}
 		
-		WriteWordLine 0 1 "Logging"
-		WriteWordLine 0 2 "Logging level: " -nonewline
+		WriteWordLine 0 2 "Logging"
+		WriteWordLine 0 3 "Logging level`t`t: " -nonewline
 		switch ($xDevice.logLevel)
 		{
 			0   {WriteWordLine 0 0 "Off"    }
@@ -335,6 +353,7 @@ Function DeviceStatus
 			6   {WriteWordLine 0 0 "Trace"  }
 			default {WriteWordLine 0 0 "Logging level could not be determined: $($xDevice.logLevel)"}
 		}
+		
 		WriteWordLine 0 0 ""
 	}
 }
@@ -358,6 +377,19 @@ Function ValidateCompanyName
 			Return ""
 		}
 	}
+}
+
+Function SecondsToMinutes
+{
+	Param( $xVal )
+	
+	If( [int]$xVal -lt 60 )
+	{
+		Return "0:$xVal"
+	}
+	$xMinutes = ([int]($xVal / 60)).ToString()
+	$xSeconds = ([int]($xVal % 60)).ToString().PadLeft(2, "0")
+	Return "$xMinutes`:$xSeconds"
 }
 
 #http://stackoverflow.com/questions/5648931/test-if-registry-value-exists
@@ -692,6 +724,7 @@ Write-Verbose "User Name   : $UserName"
 Write-Verbose "Farm Name   : $FarmName"
 Write-Verbose "Title       : $Title"
 Write-Verbose "Filename    : $filename"
+Write-Verbose "Script version: $ScriptVersion"
 
 $Word.Visible = $False
 
@@ -725,6 +758,10 @@ Else
 write-verbose "Create empty word doc"
 $Doc = $Word.Documents.Add()
 $global:Selection = $Word.Selection
+
+#set default tab stops to 1/2 inch (this line is not from Jeff Hicks)
+#36 = .50"
+$Word.ActiveDocument.DefaultTabStop = 36
 
 #Disable Spell and Grammer Check to resolve issue and improve performance (from Pat Coughlin)
 write-verbose "disable spell checking"
@@ -897,12 +934,12 @@ Else
 	WriteWordLine 0 0 "No"
 }
 
-If($PVSVersion -eq "6")
+If($PVSVersion -eq "6" -or $PVSVersion -eq "7")
 {
 	#vDisk Version tab
 	write-verbose "Processing vDisk Version Tab"
 	WriteWordLine 2 0 "vDisk Version"
-	WriteWordLine 0 1 "Alert if number of version from base image exceeds`t`t: " $farm.maxVersions
+	WriteWordLine 0 1 "Alert if number of versions from base image exceeds`t`t: " $farm.maxVersions
 	WriteWordLine 0 1 "Merge after automated vDisk update, if over alert threshold`t: " -nonewline
 	If($farm.automaticMergeEnabled -eq "1")
 	{
@@ -1004,7 +1041,7 @@ ForEach($PVSSite in $PVSSites)
 	write-verbose "Processing Options Tab"
 	WriteWordLine 2 0 "Options"
 	WriteWordLine 0 1 "Auto-Add"
-	If($PVSVersion -eq "5" -or ($PVSVersion -eq "6" -and $FarmAutoAddEnabled))
+	If($PVSVersion -eq "5" -or (($PVSVersion -eq "6" -or $PVSVersion -eq "7") -and $FarmAutoAddEnabled))
 	{
 		WriteWordLine 0 2 "Add new devices to this collection: " -nonewline
 		If($PVSSite.defaultCollectionName)
@@ -1016,9 +1053,12 @@ ForEach($PVSSite in $PVSSites)
 			WriteWordLine 0 0 "<No default collection>"
 		}
 	}
-	If($PVSVersion -eq "6")
+	If($PVSVersion -eq "6" -or $PVSVersion -eq "7")
 	{
-		WriteWordLine 0 2 "Seconds between vDisk inventory scans: " $PVSSite.inventoryFilePollingInterval
+		If($PVSVersion -eq "6")
+		{
+			WriteWordLine 0 2 "Seconds between vDisk inventory scans: " $PVSSite.inventoryFilePollingInterval
+		}
 
 		#vDisk Update
 		write-verbose "Processing vDisk Update Tab"
@@ -1070,13 +1110,24 @@ ForEach($PVSSite in $PVSSites)
 			
 		write-verbose "Processing Network Tab"
 		WriteWordLine 0 1 "Network"
-		WriteWordLine 0 2 "IP addresses:"
+		If($PVSVersion -eq "7")
+		{
+			WriteWordLine 0 2 "Streaming IP addresses:"
+		}
+		Else
+		{
+			WriteWordLine 0 2 "IP addresses:"
+		}
 		$test = $Server.ip.ToString()
 		$test1 = $test.replace(",","`n`t`t`t")
 		WriteWordLine 0 3 $test1
 		WriteWordLine 0 2 "Ports"
-		WriteWordLine 0 3 "First port: " $Server.firstPort
-		WriteWordLine 0 3 "Last port: " $Server.lastPort
+		WriteWordLine 0 3 "First port`t: " $Server.firstPort
+		WriteWordLine 0 3 "Last port`t: " $Server.lastPort
+		If($PVSVersion -eq "7")
+		{
+			WriteWordLine 0 2 "Management IP`t`t: " $Server.managementIp
+		}
 			
 		write-verbose "Processing Stores Tab"
 		WriteWordLine 0 1 "Stores"
@@ -1197,28 +1248,31 @@ ForEach($PVSSite in $PVSSites)
 				WriteWordLine 0 0 "No"
 			}
 		}
-			
-		write-verbose "Processing Logging Tab"
-		WriteWordLine 0 1 "Logging"
-		WriteWordLine 0 2 "Logging level: " -nonewline
-		switch ($Server.logLevel)
+		
+		If($PVSVersion -ne "7")
 		{
-			0   {WriteWordLine 0 0 "Off"    }
-			1   {WriteWordLine 0 0 "Fatal"  }
-			2   {WriteWordLine 0 0 "Error"  }
-			3   {WriteWordLine 0 0 "Warning"}
-			4   {WriteWordLine 0 0 "Info"   }
-			5   {WriteWordLine 0 0 "Debug"  }
-			6   {WriteWordLine 0 0 "Trace"  }
-			default {WriteWordLine 0 0 "Logging level could not be determined: $($Server.logLevel)"}
+			write-verbose "Processing Logging Tab"
+			WriteWordLine 0 1 "Logging"
+			WriteWordLine 0 2 "Logging level: " -nonewline
+			switch ($Server.logLevel)
+			{
+				0   {WriteWordLine 0 0 "Off"    }
+				1   {WriteWordLine 0 0 "Fatal"  }
+				2   {WriteWordLine 0 0 "Error"  }
+				3   {WriteWordLine 0 0 "Warning"}
+				4   {WriteWordLine 0 0 "Info"   }
+				5   {WriteWordLine 0 0 "Debug"  }
+				6   {WriteWordLine 0 0 "Trace"  }
+				default {WriteWordLine 0 0 "Logging level could not be determined: $($Server.logLevel)"}
+			}
+			WriteWordLine 0 3 "File size maximum`t: $($Server.logFileSizeMax) (MB)"
+			WriteWordLine 0 3 "Backup files maximum`t: " $Server.logFileBackupCopiesMax
+			WriteWordLine 0 0 ""
 		}
-		WriteWordLine 0 3 "File size maximum`t: $($Server.logFileSizeMax) (MB)"
-		WriteWordLine 0 3 "Backup files maximum`t: " $Server.logFileBackupCopiesMax
-		WriteWordLine 0 0 ""
 		
 		#advanced button at the bottom
 		write-verbose "Processing Server Tab on Advanced button"
-		WriteWordLine 0 1 "Advanced button"
+		WriteWordLine 0 1 "Advanced"
 		WriteWordLine 0 2 "Server"
 		WriteWordLine 0 3 "Threads per port`t`t: " $Server.threadsPerPort
 		WriteWordLine 0 3 "Buffers per thread`t`t: " $Server.buffersPerThread
@@ -1228,8 +1282,8 @@ ForEach($PVSSite in $PVSSites)
 
 		write-verbose "Processing Network Tab on Advanced button"
 		WriteWordLine 0 2 "Network"
-		WriteWordLine 0 3 "Ethernet MTU`t: $($Server.maxTransmissionUnits) (bytes)"
-		WriteWordLine 0 3 "I/O burst size`t: $($Server.ioBurstSize) (KB)"
+		WriteWordLine 0 3 "Ethernet MTU`t`t`t: $($Server.maxTransmissionUnits) (bytes)"
+		WriteWordLine 0 3 "I/O burst size`t`t`t: $($Server.ioBurstSize) (KB)"
 		WriteWordLine 0 3 "Enable non-blocking I/O for network communications: " -nonewline
 		If($Server.nonBlockingIoEnabled -eq "1")
 		{
@@ -1243,13 +1297,36 @@ ForEach($PVSSite in $PVSSites)
 		write-verbose "Processing Pacing Tab on Advanced button"
 		WriteWordLine 0 2 "Pacing"
 		WriteWordLine 0 3 "Boot pause seconds`t`t: " $Server.bootPauseSeconds
-		WriteWordLine 0 3 "Maximum boot time`t`t: $($Server.maxBootSeconds) (seconds)"
-		WriteWordLine 0 3 "Maximum devices booting`t: " $Server.maxBootDevicesAllowed
-		WriteWordLine 0 3 "vDisk Creation pacing`t`t: " $Server.vDiskCreatePacing
+		$MaxBootTime = SecondsToMinutes $Server.maxBootSeconds
+		If($PVSVersion -eq "7")
+		{
+			WriteWordLine 0 3 "Maximum boot time`t`t: $($MaxBootTime) (minutes:seconds)"
+		}
+		Else
+		{
+			WriteWordLine 0 3 "Maximum boot time`t`t: $($MaxBootTime)"
+		}
+		WriteWordLine 0 3 "Maximum devices booting`t: $($Server.maxBootDevicesAllowed) devices"
+		If($PVSVersion -eq "7")
+		{
+			WriteWordLine 0 3 "vDisk Creation pacing`t`t: $($Server.vDiskCreatePacing) milliseconds"
+		}
+		Else
+		{
+			WriteWordLine 0 3 "vDisk Creation pacing`t`t: " $Server.vDiskCreatePacing
+		}
 
 		write-verbose "Processing Device Tab on Advanced button"
 		WriteWordLine 0 2 "Device"
-		WriteWordLine 0 3 "License timeout: $($Server.licenseTimeout) (seconds)"
+		$LicenseTimeout = SecondsToMinutes $Server.licenseTimeout
+		If($PVSVersion -eq "7")
+		{
+			WriteWordLine 0 3 "License timeout`t`t`t: $($LicenseTimeout) (minutes:seconds)"
+		}
+		Else
+		{
+			WriteWordLine 0 3 "License timeout`t`t`t: $($LicenseTimeout)"
+		}
 
 		WriteWordLine 0 0 ""
 	}
@@ -1444,7 +1521,7 @@ ForEach($PVSSite in $PVSSites)
 				WriteWordLine 0 2 "General"
 				WriteWordLine 0 3 "Store`t`t`t: " $Disk.storeName
 				WriteWordLine 0 3 "Site`t`t`t: " $Disk.siteName
-				WriteWordLine 0 3 "Filename`t`t: " $Disk.diskLocatorName
+				WriteWordLine 0 3 "Filename`t: " $Disk.diskLocatorName
 				If(![String]::IsNullOrEmpty($Disk.description))
 				{
 					WriteWordLine 0 3 "Description`t`t: " $Disk.description
@@ -1520,36 +1597,20 @@ ForEach($PVSSite in $PVSSites)
 				{
 					WriteWordLine 0 0 "Standard Image (multi-device, read-only access)"
 					WriteWordLine 0 3 "Cache type: " -nonewline
-					If($PVSVersion -eq "6")
+					switch ($Disk.writeCacheType)
 					{
-						switch ($Disk.writeCacheType)
-						{
-							0   {WriteWordLine 0 0 "Private Image"}
-							1   {WriteWordLine 0 0 "Cache on server"}
-							3   {WriteWordLine 0 0 "Cache in device RAM"}
-							4   {WriteWordLine 0 0 "Cache on device hard disk"}
-							7   {WriteWordLine 0 0 "Cache on server persisted"}
-							8   {WriteWordLine 0 0 "Cache on device hard drive persisted (NT 6.1 and later)"}
-							default {WriteWordLine 0 0 "Cache type could not be determined: $($Disk.writeCacheType)"}
-						}
-					}
-					Else
-					{
-						switch ($Disk.writeCacheType)
-						{
-							0   {WriteWordLine 0 0 "Private Image"}
-							1   {WriteWordLine 0 0 "Cache on server"}
-							2   {WriteWordLine 0 0 "Cache encrypted on server disk" }
-							3   {
-								WriteWordLine 0 0 "Cache in device RAM"
-								WriteWordLine 0 3 "Cache Size: $($Disk.writeCacheSize) MBs"
-								}
-							4   {WriteWordLine 0 0 "Cache on device's HD"}
-							5   {WriteWordLine 0 0 "Cache encrypted on device's HD"}
-							6   {WriteWordLine 0 0 "RAM Disk"}
-							7   {WriteWordLine 0 0 "Difference Disk"}
-							default {WriteWordLine 0 0 "Cache type could not be determined: $($Disk.writeCacheType)"}
-						}
+						0   {WriteWordLine 0 0 "Private Image"}
+						1   {WriteWordLine 0 0 "Cache on server"}
+						2   {WriteWordLine 0 0 "Cache encrypted on server disk" }
+						3   {
+							WriteWordLine 0 0 "Cache in device RAM"
+							WriteWordLine 0 3 "Cache Size: $($Disk.writeCacheSize) MBs"
+							}
+						4   {WriteWordLine 0 0 "Cache on device's HD"}
+						5   {WriteWordLine 0 0 "Cache encrypted on device's HD"}
+						6   {WriteWordLine 0 0 "RAM Disk"}
+						7   {WriteWordLine 0 0 "Difference Disk"}
+						default {WriteWordLine 0 0 "Cache type could not be determined: $($Disk.writeCacheType)"}
 					}
 				}
 				If($Disk.activationDateEnabled -eq "0")
@@ -1600,11 +1661,25 @@ ForEach($PVSSite in $PVSSites)
 				}
 				If(![String]::IsNullOrEmpty($Disk.internalName))
 				{
-					WriteWordLine 0 3 "Internal name`t: " $Disk.internalName
+					If($Disk.internalName.Length -le 45)
+					{
+						WriteWordLine 0 3 "Internal name`t: " $Disk.internalName
+					}
+					Else
+					{
+						WriteWordLine 0 3 "Internal name`t:`n`t`t`t" $Disk.internalName
+					}
 				}
 				If(![String]::IsNullOrEmpty($Disk.originalFile))
 				{
-					WriteWordLine 0 3 "Original file`t: " $Disk.originalFile
+					If($Disk.originalFile.Length -le 45)
+					{
+						WriteWordLine 0 3 "Original file`t: " $Disk.originalFile
+					}
+					Else
+					{
+						WriteWordLine 0 3 "Original file`t:`n`t`t`t" $Disk.originalFile
+					}
 				}
 				If(![String]::IsNullOrEmpty($Disk.hardwareTarget))
 				{
@@ -1654,7 +1729,7 @@ ForEach($PVSSite in $PVSSites)
 			}
 			Else
 			{
-				#PVS 6.x
+				#PVS 6.x or 7.x
 				WriteWordLine 0 1 "vDisk Properties"
 				WriteWordLine 0 2 "General"
 				WriteWordLine 0 3 "Site`t`t: " $Disk.siteName
@@ -1669,51 +1744,26 @@ ForEach($PVSSite in $PVSSites)
 				{
 					WriteWordLine 0 0 "Private Image (single device, read/write access)"
 				}
-				Elseif ($Disk.writeCacheType -eq "7")
-				{
-					WriteWordLine 0 0 "Difference Disk Image"
-				}
 				Else
 				{
 					WriteWordLine 0 0 "Standard Image (multi-device, read-only access)"
 					WriteWordLine 0 3 "Cache type`t: " -nonewline
-					If($PVSVersion -eq "6")
+					switch ($Disk.writeCacheType)
 					{
-						switch ($Disk.writeCacheType)
-						{
-							0   {WriteWordLine 0 0 "Private Image"}
-							1   {WriteWordLine 0 0 "Cache on server"}
-							3   {WriteWordLine 0 0 "Cache in device RAM"}
-							4   {WriteWordLine 0 0 "Cache on device hard disk"}
-							7   {WriteWordLine 0 0 "Cache on server persisted"}
-							8   {WriteWordLine 0 0 "Cache on device hard drive persisted (NT 6.1 and later)"}
-							default {WriteWordLine 0 0 "Cache type could not be determined: $($Disk.writeCacheType)"}
-						}
-					}
-					Else
-					{
-						switch ($Disk.writeCacheType)
-						{
-							0   {WriteWordLine 0 0 "Private Image"}
-							1   {WriteWordLine 0 0 "Cache on server"}
-							2   {WriteWordLine 0 0 "Cache encrypted on server disk" }
-							3   {
-								WriteWordLine 0 0 "Cache in device RAM"
-								WriteWordLine 0 3 "Cache Size: $($Disk.writeCacheSize) MBs"
-								}
-							4   {WriteWordLine 0 0 "Cache on device's HD"}
-							5   {WriteWordLine 0 0 "Cache encrypted on device's HD"}
-							6   {WriteWordLine 0 0 "RAM Disk"}
-							7   {WriteWordLine 0 0 "Difference Disk"}
-							default {WriteWordLine 0 0 "Cache type could not be determined: $($Disk.writeCacheType)"}
-						}
+						0   {WriteWordLine 0 0 "Private Image"}
+						1   {WriteWordLine 0 0 "Cache on server"}
+						3   {WriteWordLine 0 0 "Cache in device RAM"}
+						4   {WriteWordLine 0 0 "Cache on device hard disk"}
+						7   {WriteWordLine 0 0 "Cache on server persisted"}
+						8   {WriteWordLine 0 0 "Cache on device hard drive persisted (NT 6.1 and later)"}
+						default {WriteWordLine 0 0 "Cache type could not be determined: $($Disk.writeCacheType)"}
 					}
 				}
 				If(![String]::IsNullOrEmpty($Disk.menuText))
 				{
-					WriteWordLine 0 3 "BIOS menu text`t: " $Disk.menuText
+					WriteWordLine 0 3 "BIOS boot menu text`t: " $Disk.menuText
 				}
-				WriteWordLine 0 3 "AD machine account password management`t: " -nonewline
+				WriteWordLine 0 3 "Enable AD machine acct pwd mgmt`t: " -nonewline
 				If($Disk.adPasswordEnabled -eq "1")
 				{
 					WriteWordLine 0 0 "Yes"
@@ -1723,7 +1773,7 @@ ForEach($PVSSite in $PVSSites)
 					WriteWordLine 0 0 "No"
 				}
 				
-				WriteWordLine 0 3 "Printer management`t`t`t`t: " -nonewline
+				WriteWordLine 0 3 "Enable printer management`t`t: " -nonewline
 				If($Disk.printerManagementEnabled -eq "1")
 				{
 					WriteWordLine 0 0 "Yes"
@@ -1732,7 +1782,7 @@ ForEach($PVSSite in $PVSSites)
 				{
 					WriteWordLine 0 0 "No"
 				}
-				WriteWordLine 0 3 "Enable streaming of this vDisk`t`t`t: " -nonewline
+				WriteWordLine 0 3 "Enable streaming of this vDisk`t`t: " -nonewline
 				If($Disk.Enabled -eq "1")
 				{
 					WriteWordLine 0 0 "Yes"
@@ -1766,11 +1816,25 @@ ForEach($PVSSite in $PVSSites)
 				}
 				If(![String]::IsNullOrEmpty($Disk.internalName))
 				{
-					WriteWordLine 0 3 "Internal name`t: " $Disk.internalName
+					If($Disk.internalName.Length -le 45)
+					{
+						WriteWordLine 0 3 "Internal name`t: " $Disk.internalName
+					}
+					Else
+					{
+						WriteWordLine 0 3 "Internal name`t:`n`t`t`t" $Disk.internalName
+					}
 				}
 				If(![String]::IsNullOrEmpty($Disk.originalFile))
 				{
-					WriteWordLine 0 3 "Original file`t: " $Disk.originalFile
+					If($Disk.originalFile.Length -le 45)
+					{
+						WriteWordLine 0 3 "Original file`t: " $Disk.originalFile
+					}
+					Else
+					{
+						WriteWordLine 0 3 "Original file`t:`n`t`t`t" $Disk.originalFile
+					}
 				}
 				If(![String]::IsNullOrEmpty($Disk.hardwareTarget))
 				{
@@ -1823,8 +1887,8 @@ ForEach($PVSSite in $PVSSites)
 				{
 					WriteWordLine 0 3 "Type`t: " $Disk.imageType
 				}
-				WriteWordLine 0 3 "Major #: " $Disk.majorRelease
-				WriteWordLine 0 3 "Minor #: " $Disk.minorRelease
+				WriteWordLine 0 3 "Major #`t: " $Disk.majorRelease
+				WriteWordLine 0 3 "Minor #`t: " $Disk.minorRelease
 				WriteWordLine 0 3 "Build #`t: " $Disk.build
 				WriteWordLine 0 3 "Serial #`t: " $Disk.serialNumber
 				
@@ -1845,7 +1909,7 @@ ForEach($PVSSite in $PVSSites)
 						2 {WriteWordLine 0 0 "Fixed"}
 						Default {WriteWordLine 0 0 "Subnet Affinity could not be determined: $($Disk.subnetAffinity)"}
 					}
-					WriteWordLine 0 1 "Rebalance Enabled`t: " -nonewline
+					WriteWordLine 0 2 "Rebalance Enabled`t: " -nonewline
 					If($Disk.rebalanceEnabled -eq "1")
 					{
 						WriteWordLine 0 0 "Yes"
@@ -1856,13 +1920,12 @@ ForEach($PVSSite in $PVSSites)
 						WriteWordLine 0 0 "No"
 					}
 				}
-				
 			}#end of PVS 6.x
 		}
 	}
 
-	#process all vDisk Update Management in site (PVS 6.x only)
-	If($PVSVersion -eq "6")
+	#process all vDisk Update Management in site (PVS 6.x and 7 only)
+	If($PVSVersion -eq "6" -or $PVSVersion -eq "7")
 	{
 		write-verbose "Processing vDisk Update Management"
 		$Temp = $PVSSite.SiteName
@@ -1873,47 +1936,49 @@ ForEach($PVSSite in $PVSSites)
 		WriteWordLine 2 0 " vDisk Update Management"
 		If($Tasks -ne $null)
 		{
-			#process all virtual hosts for this site
-			write-verbose "Processing virtual hosts"
-			WriteWordLine 0 1 "Hosts"
-			$Temp = $PVSSite.SiteName
-			$GetWhat = "VirtualHostingPool"
-			$GetParam = "siteName=$Temp"
-			$ErrorTxt = "Virtual Hosting Pool information"
-			$vHosts = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-			If($vHosts -ne $null)
+			If($PVSVersion -eq "6")
 			{
-				WriteWordLine 3 0 "Hosts"
-				ForEach($vHost in $vHosts)
+				#process all virtual hosts for this site
+				write-verbose "Processing virtual hosts (PVS6)"
+				WriteWordLine 0 1 "Hosts"
+				$Temp = $PVSSite.SiteName
+				$GetWhat = "VirtualHostingPool"
+				$GetParam = "siteName=$Temp"
+				$ErrorTxt = "Virtual Hosting Pool information"
+				$vHosts = BuildPVSObject $GetWhat $GetParam $ErrorTxt
+				If($vHosts -ne $null)
 				{
-					Write-verbose "Processing virtual host $($vHost.virtualHostingPoolName)"
-					write-verbose "Processing General Tab"
-					WriteWordLine 4 0 $vHost.virtualHostingPoolName
-					WriteWordLine 0 2 "General"
-					WriteWordLine 0 3 "Type`t`t: " -nonewline
-					switch ($vHost.type)
+					WriteWordLine 3 0 "Hosts"
+					ForEach($vHost in $vHosts)
 					{
-						0 {WriteWordLine 0 0 "Citrix XenServer"}
-						1 {WriteWordLine 0 0 "Microsoft SCVMM/Hyper-V"}
-						2 {WriteWordLine 0 0 "VMware vSphere/ESX"}
-						Default {WriteWordLine 0 0 "Virtualization Host type could not be determined: $($vHost.type)"}
+						Write-verbose "Processing virtual host $($vHost.virtualHostingPoolName)"
+						write-verbose "Processing General Tab"
+						WriteWordLine 4 0 $vHost.virtualHostingPoolName
+						WriteWordLine 0 2 "General"
+						WriteWordLine 0 3 "Type`t`t: " -nonewline
+						switch ($vHost.type)
+						{
+							0 {WriteWordLine 0 0 "Citrix XenServer"}
+							1 {WriteWordLine 0 0 "Microsoft SCVMM/Hyper-V"}
+							2 {WriteWordLine 0 0 "VMWare vSphere/ESX"}
+							Default {WriteWordLine 0 0 "Virtualization Host type could not be determined: $($vHost.type)"}
+						}
+						WriteWordLine 0 3 "Name`t`t: " $vHost.virtualHostingPoolName
+						If(![String]::IsNullOrEmpty($vHost.description))
+						{
+							WriteWordLine 0 3 "Description`t: " $vHost.description
+						}
+						WriteWordLine 0 3 "Host`t`t: " $vHost.server
+						
+						write-verbose "Processing Advanced Tab"
+						WriteWordLine 0 2 "Advanced"
+						WriteWordLine 0 3 "Update limit`t`t: " $vHost.updateLimit
+						WriteWordLine 0 3 "Update timeout`t`t: $($vHost.updateTimeout) minutes"
+						WriteWordLine 0 3 "Shutdown timeout`t: $($vHost.shutdownTimeout) minutes"
+						WriteWordLine 0 3 "Port`t`t`t: " $vHost.port
 					}
-					WriteWordLine 0 3 "Name`t`t: " $vHost.virtualHostingPoolName
-					If(![String]::IsNullOrEmpty($vHost.description))
-					{
-						WriteWordLine 0 3 "Description`t: " $vHost.description
-					}
-					WriteWordLine 0 3 "Host`t`t: " $vHost.server
-					
-					write-verbose "Processing Advanced Tab"
-					WriteWordLine 0 2 "Advanced"
-					WriteWordLine 0 3 "Update limit`t`t: " $vHost.updateLimit
-					WriteWordLine 0 3 "Update timeout`t`t: $($vHost.updateTimeout) minutes"
-					WriteWordLine 0 3 "Shutdown timeout`t: $($vHost.shutdownTimeout) minutes"
-					WriteWordLine 0 3 "Port`t`t`t: " $vHost.port
 				}
 			}
-			
 			WriteWordLine 0 1 "vDisks"
 			#process all the Update Managed vDisks for this site
 			write-verbose "Processing all Update Managed vDisks for this site"
@@ -1963,7 +2028,6 @@ ForEach($PVSSite in $PVSSites)
 					$ErrorTxt = "Device Info information"
 					$Device = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 					DeviceStatus $Device
-					
 					
 					write-verbose "Processing Logging Tab"
 					WriteWordLine 0 2 "Logging"
@@ -2324,7 +2388,7 @@ ForEach($PVSSite in $PVSSites)
 					{
 						WriteWordLine 0 3 "Description`t`t: " $Device.description
 					}
-					If($PVSVersion -eq "6" -and $Device.type -ne "3")
+					If(($PVSVersion -eq "6" -or $PVSVersion -eq "7") -and $Device.type -ne "3")
 					{
 						WriteWordLine 0 3 "Type`t`t`t: " -nonewline
 						switch ($Device.type)
@@ -2549,6 +2613,47 @@ ForEach($PVSSite in $PVSSites)
 	Else
 	{
 		WriteWordLine 0 1 "There are no Site Views configured"
+	}
+	If($PVSVersion -eq "7")
+	{
+		#process all virtual hosts for this site
+		write-verbose "Processing virtual hosts (PVS7)"
+		WriteWordLine 0 1 "Hosts"
+		$Temp = $PVSSite.SiteName
+		$GetWhat = "VirtualHostingPool"
+		$GetParam = "siteName=$Temp"
+		$ErrorTxt = "Virtual Hosting Pool information"
+		$vHosts = BuildPVSObject $GetWhat $GetParam $ErrorTxt
+		If($vHosts -ne $null)
+		{
+			WriteWordLine 3 0 "Hosts"
+			ForEach($vHost in $vHosts)
+			{
+				Write-verbose "Processing virtual host $($vHost.virtualHostingPoolName)"
+				write-verbose "Processing General Tab"
+				WriteWordLine 4 0 $vHost.virtualHostingPoolName
+				WriteWordLine 0 2 "General"
+				WriteWordLine 0 3 "Type`t`t: " -nonewline
+				switch ($vHost.type)
+				{
+					0 {WriteWordLine 0 0 "Citrix XenServer"}
+					1 {WriteWordLine 0 0 "Microsoft SCVMM/Hyper-V"}
+					2 {WriteWordLine 0 0 "VMWare vSphere/ESX"}
+					Default {WriteWordLine 0 0 "Virtualization Host type could not be determined: $($vHost.type)"}
+				}
+				WriteWordLine 0 3 "Name`t`t: " $vHost.virtualHostingPoolName
+				If(![String]::IsNullOrEmpty($vHost.description))
+				{
+					WriteWordLine 0 3 "Description`t: " $vHost.description
+				}
+				WriteWordLine 0 3 "Host`t`t: " $vHost.server
+				
+				write-verbose "Processing vDisk Update Tab"
+				WriteWordLine 0 2 "Update limit`t`t: " $vHost.updateLimit
+				WriteWordLine 0 2 "Update timeout`t`t: $($vHost.updateTimeout) minutes"
+				WriteWordLine 0 2 "Shutdown timeout`t: $($vHost.shutdownTimeout) minutes"
+			}
+		}
 	}
 }
 
