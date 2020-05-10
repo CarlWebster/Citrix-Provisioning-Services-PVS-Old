@@ -1,10 +1,17 @@
-#Carl Webster, CTP and Sr. Solutions Architect at Choice Solutions
+#Created by Carl Webster
 #webster@carlwebster.com
 #@carlwebster on Twitter
-#http://www.CarlWebster.com
+#https://www.CarlWebster.com
 #This script written for "Benji", March 19, 2012
-#Thanks to Michael B. Smith, Joe Shonk and Stephane Thirion
-#for testing and fine-tuning tips 
+#Thanks to Michael B. Smith, Joe Shonk and Stephane Thirion for testing and fine-tuning tips 
+
+#Version 4.291 17-Dec-2019
+#	Fix Swedish Table of Contents (Thanks to Johan Kallio)
+#		From 
+#			'sv-'	{ 'Automatisk innehållsförteckning2'; Break }
+#		To
+#			'sv-'	{ 'Automatisk innehållsförteckn2'; Break }
+#	Updated help text
 
 #Version 4.29 7-Apr-2018
 #	Added Operating System information to Functions GetComputerWMIInfo and OutputComputerItem
