@@ -193,9 +193,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: PVS_Inventory_V41.ps1
-	VERSION: 4.14
+	VERSION: 4.15
 	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith and Jeff Wouters)
-	LASTEDIT: April 1, 2014
+	LASTEDIT: May 20, 2014
 #>
 
 
@@ -278,6 +278,9 @@ Param([parameter(
 
 #force -verbose on
 $PSDefaultParameterValues = @{"*:Verbose"=$True}
+#set $ErrorActionPreference
+$SaveEAPreference = $ErrorActionPreference
+$ErrorActionPreference = 'SilentlyContinue'
 	
 #Carl Webster, CTP and independent consultant
 #webster@carlwebster.com
@@ -299,7 +302,7 @@ $PSDefaultParameterValues = @{"*:Verbose"=$True}
 #	Change $Global: variables to regular variables
 #	Change all instances of using $Word.Quit() to also use proper garbage collection
 #	Change Default Cover Page to Sideline since Motion is not in German Word
-#	Change Get-RegistryValue function to handle $null return value
+#	Change Get-RegistryValue function to handle $Null return value
 #	Change wording when script aborts from a blank company name
 #	Fix issues with Word 2007 SaveAs under (Server 2008 and Windows 7) and Server 2008 R2
 #	Abort script if Farm information cannot be retrieved
@@ -333,6 +336,15 @@ $PSDefaultParameterValues = @{"*:Verbose"=$True}
 #Version 4.14
 #	Save current settings for Spell Check and Grammar Check before disabling them
 #	Before closing Word, put Spelling and Grammar settings back to original
+#Version 4.15
+#	Bring up-to-date with the changes made to the Active Directory and DHCP documentation scripts
+#		Remove all hard-coded values for Word and Table functions
+#		Don't abort script if CompanyName is not provided
+#		Horizontal table header row flows across page Breaks
+#		Format most Warning and Error messages to make them more readable
+#		Test for existence of "word" variable before removal
+#		Fix GetComputerWMIInfo to work in a multi-forest Active Directory environment
+#	Next script update will require PowerShell Version 3.0 or higher
 
 Set-StrictMode -Version 2
 
@@ -352,7 +364,48 @@ Set-StrictMode -Version 2
 [int]$wdWord2010 = 14
 [int]$wdWord2013 = 15
 [int]$wdSaveFormatPDF = 17
-[string]$RunningOS = (Get-WmiObject -class Win32_OperatingSystem).Caption
+#http://blogs.technet.com/b/heyscriptingguy/archive/2006/03/01/how-can-i-right-align-a-single-column-in-a-word-table.aspx
+#http://msdn.microsoft.com/en-us/library/office/ff835817%28v=office.15%29.aspx
+[int]$wdAlignParagraphLeft = 0
+[int]$wdAlignParagraphCenter = 1
+[int]$wdAlignParagraphRight = 2
+#http://msdn.microsoft.com/en-us/library/office/ff193345%28v=office.15%29.aspx
+[int]$wdCellAlignVerticalTop = 0
+[int]$wdCellAlignVerticalCenter = 1
+[int]$wdCellAlignVerticalBottom = 2
+#http://msdn.microsoft.com/en-us/library/office/ff844856%28v=office.15%29.aspx
+[int]$wdAutoFitFixed = 0
+[int]$wdAutoFitContent = 1
+[int]$wdAutoFitWindow = 2
+#http://msdn.microsoft.com/en-us/library/office/ff821928%28v=office.15%29.aspx
+[int]$wdAdjustNone = 0
+[int]$wdAdjustProportional = 1
+[int]$wdAdjustFirstColumn = 2
+[int]$wdAdjustSameWidth = 3
+
+[int]$PointsPerTabStop = 36
+[int]$Indent0TabStops = 0 * $PointsPerTabStop
+[int]$Indent1TabStops = 1 * $PointsPerTabStop
+[int]$Indent2TabStops = 2 * $PointsPerTabStop
+[int]$Indent3TabStops = 3 * $PointsPerTabStop
+[int]$Indent4TabStops = 4 * $PointsPerTabStop
+
+# http://www.thedoctools.com/index.php?show=wt_style_names_english_danish_german_french
+[int]$wdStyleHeading1 = -2
+[int]$wdStyleHeading2 = -3
+[int]$wdStyleHeading3 = -4
+[int]$wdStyleHeading4 = -5
+[int]$wdStyleNoSpacing = -158
+[int]$wdTableGrid = -155
+
+#http://groovy.codehaus.org/modules/scriptom/1.6.0/scriptom-office-2K3-tlb/apidocs/org/codehaus/groovy/scriptom/tlb/office/word/WdLineStyle.html
+[int]$wdLineStyleNone = 0
+[int]$wdLineStyleSingle = 1
+
+[int]$wdHeadingFormatTrue = -1
+[int]$wdHeadingFormatFalse = 0 
+
+[string]$RunningOS = (Get-WmiObject -class Win32_OperatingSystem -EA 0).Caption
 
 $hash = @{}
 
@@ -450,14 +503,6 @@ Switch ($PSCulture.Substring(0,3))
 			}
 		}
 }
-
-# http://www.thedoctools.com/index.php?show=wt_style_names_english_danish_german_french
-$wdStyleHeading1 = -2
-$wdStyleHeading2 = -3
-$wdStyleHeading3 = -4
-$wdStyleHeading4 = -5
-$wdStyleNoSpacing = -158
-$wdTableGrid = -155
 
 $myHash = $hash.$PSCulture
 
@@ -778,6 +823,7 @@ Function GetComputerWMIInfo
 	# k.baggerman@myvirtualvision.com
 	# @kbaggerman on Twitter
 	# http://blog.myvirtualvision.com
+	# modified 1-May-2014 to work in trusted AD Forests and using different domain admin credentials	
 
 	#Get Computer info
 	Write-Verbose "$(Get-Date): `t`tProcessing WMI Computer information"
@@ -789,21 +835,18 @@ Function GetComputerWMIInfo
 	Try
 	{
 		$Results = Get-WmiObject -computername $RemoteComputerName win32_computersystem
-		$ComputerItems = $Results | Select Manufacturer, Model, Domain, @{N="TotalPhysicalRam"; E={[math]::round(($_.TotalPhysicalMemory / 1GB),0)}}
-		$Results = $Null
 	}
 	
 	Catch
 	{
-		Write-Verbose "$(Get-Date): Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
-		$GotComputerItems = $False
-		Write-Warning "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
-		WriteWordLine 0 0 "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
-		WriteWordLine 0 0 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository and winmgmt /salvagerepository"
+		$Results = $Null
 	}
 	
-	If($GotComputerItems)
+	If($? -and $Results -ne $Null)
 	{
+		$ComputerItems = $Results | Select Manufacturer, Model, Domain, @{N="TotalPhysicalRam"; E={[math]::round(($_.TotalPhysicalMemory / 1GB),0)}}
+		$Results = $Null
+
 		ForEach($Item in $ComputerItems)
 		{
 			WriteWordLine 0 2 "Manufacturer`t: " $Item.manufacturer
@@ -813,7 +856,21 @@ Function GetComputerWMIInfo
 			WriteWordLine 0 2 ""
 		}
 	}
-
+	ElseIf(!$?)
+	{
+		Write-Verbose "$(Get-Date): Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
+		Write-Warning "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
+		WriteWordLine 0 2 "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)" "" $Null 0 $False $True
+		WriteWordLine 0 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository" "" $Null 0 $False $True
+		WriteWordLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
+		WriteWordLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
+	}
+	Else
+	{
+		Write-Verbose "$(Get-Date): No results returned for Computer information"
+		WriteWordLine 0 2 "No results returned for Computer information" "" $Null 0 $False $True
+	}
+	
 	#Get Disk info
 	Write-Verbose "$(Get-Date): `t`t`tDrive information"
 	WriteWordLine 0 1 "Drive(s)"
@@ -822,23 +879,19 @@ Function GetComputerWMIInfo
 	Try
 	{
 		$Results = Get-WmiObject -computername $RemoteComputerName Win32_LogicalDisk
-		$drives = $Results | select caption, @{N="drivesize"; E={[math]::round(($_.size / 1GB),0)}}, 
-		filesystem, @{N="drivefreespace"; E={[math]::round(($_.freespace / 1GB),0)}}, 
-		volumename, drivetype, volumedirty, volumeserialnumber
-		$Results = $Null
 	}
 	
 	Catch
 	{
-		Write-Verbose "$(Get-Date): Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
-		$GotDrives = $False
-		Write-Warning "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
-		WriteWordLine 0 0 "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
-		WriteWordLine 0 0 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository and winmgmt /salvagerepository"
+		$Results = $Null
 	}
-	
-	If($GotDrives)
+
+	If($? -and $Results -ne $Null)
 	{
+		$drives = $Results | Select caption, @{N="drivesize"; E={[math]::round(($_.size / 1GB),0)}}, 
+		filesystem, @{N="drivefreespace"; E={[math]::round(($_.freespace / 1GB),0)}}, 
+		volumename, drivetype, volumedirty, volumeserialnumber
+		$Results = $Null
 		ForEach($drive in $drives)
 		{
 			If($drive.caption -ne "A:" -and $drive.caption -ne "B:")
@@ -886,6 +939,21 @@ Function GetComputerWMIInfo
 			}
 		}
 	}
+	ElseIf(!$?)
+	{
+		Write-Verbose "$(Get-Date): Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
+		Write-Warning "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
+		WriteWordLine 0 2 "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)" "" $Null 0 $False $True
+		WriteWordLine 0 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository" "" $Null 0 $False $True
+		WriteWordLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
+		WriteWordLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
+	}
+	Else
+	{
+		Write-Verbose "$(Get-Date): No results returned for Drive information"
+		WriteWordLine 0 2 "No results returned for Drive information" "" $Null 0 $False $True
+	}
+	
 
 	#Get CPU's and stepping
 	Write-Verbose "$(Get-Date): `t`t`tProcessor information"
@@ -895,22 +963,18 @@ Function GetComputerWMIInfo
 	Try
 	{
 		$Results = Get-WmiObject -computername $RemoteComputerName win32_Processor
-		$Processors = $Results | select availability, name, description, maxclockspeed, 
-		l2cachesize, l3cachesize, numberofcores, numberoflogicalprocessors
-		$Results = $Null
 	}
 	
 	Catch
 	{
-		Write-Verbose "$(Get-Date): Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
-		$GotProcessors = $False
-		Write-Warning "Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
-		WriteWordLine 0 0 "Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
-		WriteWordLine 0 0 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository and winmgmt /salvagerepository"
+		$Results = $Null
 	}
-	
-	If($GotProcessors)
+
+	If($? -and $Results -ne $Null)
 	{
+		$Processors = $Results | Select availability, name, description, maxclockspeed, 
+		l2cachesize, l3cachesize, numberofcores, numberoflogicalprocessors
+		$Results = $Null
 		ForEach($processor in $processors)
 		{
 			WriteWordLine 0 2 "Name`t`t`t: " $processor.name
@@ -957,6 +1021,20 @@ Function GetComputerWMIInfo
 			WriteWordLine 0 2 ""
 		}
 	}
+	ElseIf(!$?)
+	{
+		Write-Verbose "$(Get-Date): Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
+		Write-Warning "Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
+		WriteWordLine 0 2 "Get-WmiObject win32_Processor failed for $($RemoteComputerName)" "" $Null 0 $False $True
+		WriteWordLine 0 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository" "" $Null 0 $False $True
+		WriteWordLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
+		WriteWordLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
+	}
+	Else
+	{
+		Write-Verbose "$(Get-Date): No results returned for Processor information"
+		WriteWordLine 0 2 "No results returned for Processor information" "" $Null 0 $False $True
+	}
 
 	#Get Nics
 	Write-Verbose "$(Get-Date): `t`t`tNIC information"
@@ -965,163 +1043,208 @@ Function GetComputerWMIInfo
 	
 	Try
 	{
-		$Results = Get-WmiObject -computername $RemoteComputerName win32_networkadapterconfiguration 
-		$Nics = $Results | where {$_.ipenabled -eq $True}
-		$Results = $Null
+		$Results = Get-WmiObject -computername $RemoteComputerName win32_networkadapterconfiguration
 	}
 	
 	Catch
 	{
-		Write-Verbose "$(Get-Date): Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-		$GotNics = $False
-		Write-Warning "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-		WriteWordLine 0 0 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-		WriteWordLine 0 0 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository and winmgmt /salvagerepository"
+		$Results
 	}
 
-	If( $Nics -eq $Null ) 
-	{ 
-		$GotNics = $False 
-	} 
-	Else 
-	{ 
-		$GotNics = !($Nics.__PROPERTY_COUNT -eq 0) 
-	} 
-	
-	If($GotNics)
+	If($? -and $Results -ne $Null)
 	{
-		ForEach($nic in $nics)
+		$Nics = $Results | Where {$_.ipaddress -ne $Null}
+		$Results = $Null
+
+		If($Nics -eq $Null ) 
+		{ 
+			$GotNics = $False 
+		} 
+		Else 
+		{ 
+			$GotNics = !($Nics.__PROPERTY_COUNT -eq 0) 
+		} 
+	
+		If($GotNics)
 		{
-			$ThisNic = Get-WmiObject -computername $RemoteComputerName win32_networkadapter | where {$_.index -eq $nic.index}
-			If($ThisNic.Name -eq $nic.description)
+			ForEach($nic in $nics)
 			{
-				WriteWordLine 0 2 "Name`t`t`t: " $ThisNic.Name
-			}
-			Else
-			{
-				WriteWordLine 0 2 "Name`t`t`t: " $ThisNic.Name
-				WriteWordLine 0 2 "Description`t`t: " $nic.description
-			}
-			WriteWordLine 0 2 "Connection ID`t`t: " $ThisNic.NetConnectionID
-			WriteWordLine 0 2 "Manufacturer`t`t: " $ThisNic.manufacturer
-			WriteWordLine 0 2 "Availability`t`t: " -nonewline
-			Switch ($ThisNic.availability)
-			{
-				1	{WriteWordLine 0 0 "Other"}
-				2	{WriteWordLine 0 0 "Unknown"}
-				3	{WriteWordLine 0 0 "Running or Full Power"}
-				4	{WriteWordLine 0 0 "Warning"}
-				5	{WriteWordLine 0 0 "In Test"}
-				6	{WriteWordLine 0 0 "Not Applicable"}
-				7	{WriteWordLine 0 0 "Power Off"}
-				8	{WriteWordLine 0 0 "Off Line"}
-				9	{WriteWordLine 0 0 "Off Duty"}
-				10	{WriteWordLine 0 0 "Degraded"}
-				11	{WriteWordLine 0 0 "Not Installed"}
-				12	{WriteWordLine 0 0 "Install Error"}
-				13	{WriteWordLine 0 0 "Power Save - Unknown"}
-				14	{WriteWordLine 0 0 "Power Save - Low Power Mode"}
-				15	{WriteWordLine 0 0 "Power Save - Standby"}
-				16	{WriteWordLine 0 0 "Power Cycle"}
-				17	{WriteWordLine 0 0 "Power Save - Warning"}
-				Default	{WriteWordLine 0 0 "Unknown"}
-			}
-			WriteWordLine 0 2 "Physical Address`t: " $nic.macaddress
-			WriteWordLine 0 2 "IP Address`t`t: " $nic.ipaddress
-			WriteWordLine 0 2 "Default Gateway`t: " $nic.Defaultipgateway
-			WriteWordLine 0 2 "Subnet Mask`t`t: " $nic.ipsubnet
-			If($nic.dhcpenabled)
-			{
-				$DHCPLeaseObtainedDate = $nic.ConvertToDateTime($nic.dhcpleaseobtained)
-				$DHCPLeaseExpiresDate = $nic.ConvertToDateTime($nic.dhcpleaseexpires)
-				WriteWordLine 0 2 "DHCP Enabled`t`t: " $nic.dhcpenabled
-				WriteWordLine 0 2 "DHCP Lease Obtained`t: " $dhcpleaseobtaineddate
-				WriteWordLine 0 2 "DHCP Lease Expires`t: " $dhcpleaseexpiresdate
-				WriteWordLine 0 2 "DHCP Server`t`t:" $nic.dhcpserver
-			}
-			If(![String]::IsNullOrEmpty($nic.dnsdomain))
-			{
-				WriteWordLine 0 2 "DNS Domain`t`t: " $nic.dnsdomain
-			}
-			If($nic.dnsdomainsuffixsearchorder -ne $Null -and $nic.dnsdomainsuffixsearchorder.length -gt 0)
-			{
-				[int]$x = 1
-				WriteWordLine 0 2 "DNS Search Suffixes`t:" -nonewline
-				ForEach($DNSDomain in $nic.dnsdomainsuffixsearchorder)
+				Try
 				{
-					If($x -eq 1)
+					$ThisNic = Get-WmiObject -computername $RemoteComputerName win32_networkadapter | Where {$_.index -eq $nic.index}
+				}
+				
+				Catch 
+				{
+					$ThisNic = $Null
+				}
+				
+				If($? -and $ThisNic -ne $Null)
+				{
+					If($ThisNic.Name -eq $nic.description)
 					{
-						$x = 2
-						WriteWordLine 0 0 " $($DNSDomain)"
+						WriteWordLine 0 2 "Name`t`t`t: " $ThisNic.Name
 					}
 					Else
 					{
-						WriteWordLine 0 5 " $($DNSDomain)"
+						WriteWordLine 0 2 "Name`t`t`t: " $ThisNic.Name
+						WriteWordLine 0 2 "Description`t`t: " $nic.description
 					}
-				}
-			}
-			WriteWordLine 0 2 "DNS WINS Enabled`t: " -nonewline
-			If($nic.dnsenabledforwinsresolution)
-			{
-				WriteWordLine 0 0 "Yes"
-			}
-			Else
-			{
-				WriteWordLine 0 0 "No"
-			}
-			If($nic.dnsserversearchorder -ne $Null -and $nic.dnsserversearchorder.length -gt 0)
-			{
-				[int]$x = 1
-				WriteWordLine 0 2 "DNS Servers`t`t:" -nonewline
-				ForEach($DNSServer in $nic.dnsserversearchorder)
-				{
-					If($x -eq 1)
+					WriteWordLine 0 2 "Connection ID`t`t: " $ThisNic.NetConnectionID
+					WriteWordLine 0 2 "Manufacturer`t`t: " $ThisNic.manufacturer
+					WriteWordLine 0 2 "Availability`t`t: " -nonewline
+					Switch ($ThisNic.availability)
 					{
-						$x = 2
-						WriteWordLine 0 0 " $($DNSServer)"
+						1	{WriteWordLine 0 0 "Other"}
+						2	{WriteWordLine 0 0 "Unknown"}
+						3	{WriteWordLine 0 0 "Running or Full Power"}
+						4	{WriteWordLine 0 0 "Warning"}
+						5	{WriteWordLine 0 0 "In Test"}
+						6	{WriteWordLine 0 0 "Not Applicable"}
+						7	{WriteWordLine 0 0 "Power Off"}
+						8	{WriteWordLine 0 0 "Off Line"}
+						9	{WriteWordLine 0 0 "Off Duty"}
+						10	{WriteWordLine 0 0 "Degraded"}
+						11	{WriteWordLine 0 0 "Not Installed"}
+						12	{WriteWordLine 0 0 "Install Error"}
+						13	{WriteWordLine 0 0 "Power Save - Unknown"}
+						14	{WriteWordLine 0 0 "Power Save - Low Power Mode"}
+						15	{WriteWordLine 0 0 "Power Save - Standby"}
+						16	{WriteWordLine 0 0 "Power Cycle"}
+						17	{WriteWordLine 0 0 "Power Save - Warning"}
+						Default	{WriteWordLine 0 0 "Unknown"}
+					}
+					WriteWordLine 0 2 "Physical Address`t: " $nic.macaddress
+					WriteWordLine 0 2 "IP Address`t`t: " $nic.ipaddress
+					WriteWordLine 0 2 "Default Gateway`t: " $nic.Defaultipgateway
+					WriteWordLine 0 2 "Subnet Mask`t`t: " $nic.ipsubnet
+					If($nic.dhcpenabled)
+					{
+						$DHCPLeaseObtainedDate = $nic.ConvertToDateTime($nic.dhcpleaseobtained)
+						$DHCPLeaseExpiresDate = $nic.ConvertToDateTime($nic.dhcpleaseexpires)
+						WriteWordLine 0 2 "DHCP Enabled`t`t: " $nic.dhcpenabled
+						WriteWordLine 0 2 "DHCP Lease Obtained`t: " $dhcpleaseobtaineddate
+						WriteWordLine 0 2 "DHCP Lease Expires`t: " $dhcpleaseexpiresdate
+						WriteWordLine 0 2 "DHCP Server`t`t:" $nic.dhcpserver
+					}
+					If(![String]::IsNullOrEmpty($nic.dnsdomain))
+					{
+						WriteWordLine 0 2 "DNS Domain`t`t: " $nic.dnsdomain
+					}
+					If($nic.dnsdomainsuffixsearchorder -ne $Null -and $nic.dnsdomainsuffixsearchorder.length -gt 0)
+					{
+						[int]$x = 1
+						WriteWordLine 0 2 "DNS Search Suffixes`t:" -nonewline
+						ForEach($DNSDomain in $nic.dnsdomainsuffixsearchorder)
+						{
+							If($x -eq 1)
+							{
+								$x = 2
+								WriteWordLine 0 0 " $($DNSDomain)"
+							}
+							Else
+							{
+								WriteWordLine 0 5 " $($DNSDomain)"
+							}
+						}
+					}
+					WriteWordLine 0 2 "DNS WINS Enabled`t: " -nonewline
+					If($nic.dnsenabledforwinsresolution)
+					{
+						WriteWordLine 0 0 "Yes"
 					}
 					Else
 					{
-						WriteWordLine 0 5 " $($DNSServer)"
+						WriteWordLine 0 0 "No"
+					}
+					If($nic.dnsserversearchorder -ne $Null -and $nic.dnsserversearchorder.length -gt 0)
+					{
+						[int]$x = 1
+						WriteWordLine 0 2 "DNS Servers`t`t:" -nonewline
+						ForEach($DNSServer in $nic.dnsserversearchorder)
+						{
+							If($x -eq 1)
+							{
+								$x = 2
+								WriteWordLine 0 0 " $($DNSServer)"
+							}
+							Else
+							{
+								WriteWordLine 0 5 " $($DNSServer)"
+							}
+						}
+					}
+					WriteWordLine 0 2 "NetBIOS Setting`t`t: " -nonewline
+					Switch ($nic.TcpipNetbiosOptions)
+					{
+						0	{WriteWordLine 0 0 "Use NetBIOS setting from DHCP Server"}
+						1	{WriteWordLine 0 0 "Enable NetBIOS"}
+						2	{WriteWordLine 0 0 "Disable NetBIOS"}
+						Default	{WriteWordLine 0 0 "Unknown"}
+					}
+					WriteWordLine 0 2 "WINS:"
+					WriteWordLine 0 3 "Enabled LMHosts`t: " -nonewline
+					If($nic.winsenablelmhostslookup)
+					{
+						WriteWordLine 0 0 "Yes"
+					}
+					Else
+					{
+						WriteWordLine 0 0 "No"
+					}
+					If(![String]::IsNullOrEmpty($nic.winshostlookupfile))
+					{
+						WriteWordLine 0 3 "Host Lookup File`t: " $nic.winshostlookupfile
+					}
+					If(![String]::IsNullOrEmpty($nic.winsprimaryserver))
+					{
+						WriteWordLine 0 3 "Primary Server`t`t: " $nic.winsprimaryserver
+					}
+					If(![String]::IsNullOrEmpty($nic.winssecondaryserver))
+					{
+						WriteWordLine 0 3 "Secondary Server`t: " $nic.winssecondaryserver
+					}
+					If(![String]::IsNullOrEmpty($nic.winsscopeid))
+					{
+						WriteWordLine 0 3 "Scope ID`t`t: " $nic.winsscopeid
 					}
 				}
+				ElseIf(!$?)
+				{
+					Write-Warning "$(Get-Date): Error retrieving NIC information"
+					Write-Verbose "$(Get-Date): Get-WmiObject win32_networkadapter failed for $($RemoteComputerName)"
+					Write-Warning "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+					WriteWordLine 0 2 "Error retrieving NIC information" "" $Null 0 $False $True
+					WriteWordLine 0 2 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)" $Null 0 $False $True
+					WriteWordLine 0 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository" "" $Null 0 $False $True
+					WriteWordLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
+					WriteWordLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
+				}
+				Else
+				{
+					Write-Verbose "$(Get-Date): No results returned for NIC information"
+					WriteWordLine 0 2 "No results returned for NIC information" "" $Null 0 $False $True
+				}
 			}
-			WriteWordLine 0 2 "NetBIOS Setting`t`t: " -nonewline
-			Switch ($nic.TcpipNetbiosOptions)
-			{
-				0	{WriteWordLine 0 0 "Use NetBIOS setting from DHCP Server"}
-				1	{WriteWordLine 0 0 "Enable NetBIOS"}
-				2	{WriteWordLine 0 0 "Disable NetBIOS"}
-				Default	{WriteWordLine 0 0 "Unknown"}
-			}
-			WriteWordLine 0 2 "WINS:"
-			WriteWordLine 0 3 "Enabled LMHosts`t: " -nonewline
-			If($nic.winsenablelmhostslookup)
-			{
-				WriteWordLine 0 0 "Yes"
-			}
-			Else
-			{
-				WriteWordLine 0 0 "No"
-			}
-			If(![String]::IsNullOrEmpty($nic.winshostlookupfile))
-			{
-				WriteWordLine 0 3 "Host Lookup File`t: " $nic.winshostlookupfile
-			}
-			If(![String]::IsNullOrEmpty($nic.winsprimaryserver))
-			{
-				WriteWordLine 0 3 "Primary Server`t`t: " $nic.winsprimaryserver
-			}
-			If(![String]::IsNullOrEmpty($nic.winssecondaryserver))
-			{
-				WriteWordLine 0 3 "Secondary Server`t: " $nic.winssecondaryserver
-			}
-			If(![String]::IsNullOrEmpty($nic.winsscopeid))
-			{
-				WriteWordLine 0 3 "Scope ID`t`t: " $nic.winsscopeid
-			}
-		}
+		}	
 	}
+	ElseIf(!$?)
+	{
+		Write-Warning "$(Get-Date): Error retrieving NIC configuration information"
+		Write-Verbose "$(Get-Date): Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+		Write-Warning "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+		WriteWordLine 0 2 "Error retrieving NIC configuration information" "" $Null 0 $False $True
+		WriteWordLine 0 2 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)" $Null 0 $False $True
+		WriteWordLine 0 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository" "" $Null 0 $False $True
+		WriteWordLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
+		WriteWordLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
+	}
+	Else
+	{
+		Write-Verbose "$(Get-Date): No results returned for NIC configuration information"
+		WriteWordLine 0 2 "No results returned for NIC configuration information" "" $Null 0 $False $True
+	}
+	
 	WriteWordLine 0 0 ""
 }
 
@@ -1129,8 +1252,9 @@ Function CheckWordPrereq
 {
 	If((Test-Path  REGISTRY::HKEY_CLASSES_ROOT\Word.Application) -eq $False)
 	{
-		Write-Host "This script directly outputs to Microsoft Word, please install Microsoft Word"
-		exit
+		$ErrorActionPreference = $SaveEAPreference
+		Write-Host "`n`n`t`tThis script directly outputs to Microsoft Word, please install Microsoft Word`n`n"
+		Exit
 	}
 
 	#find out our session (usually "1" except on TS/RDC or Citrix)
@@ -1140,8 +1264,9 @@ Function CheckWordPrereq
 	[bool]$wordrunning = ((Get-Process 'WinWord' -ea 0)|?{$_.SessionId -eq $SessionID}) -ne $Null
 	If($wordrunning)
 	{
-		Write-Host "Please close all instances of Microsoft Word before running this report."
-		exit
+		$ErrorActionPreference = $SaveEAPreference
+		Write-Host "`n`n`tPlease close all instances of Microsoft Word before running this report.`n`n"
+		Exit
 	}
 }
 
@@ -1149,9 +1274,9 @@ Function CheckWord2007SaveAsPDFInstalled
 {
 	If((Test-Path  REGISTRY::HKEY_CLASSES_ROOT\Installer\Products\000021090B0090400000000000F01FEC) -eq $False)
 	{
-		Write-Host "Word 2007 is detected and the option to SaveAs PDF was selected but the Word 2007 SaveAs PDF add-in is not installed."
-		Write-Host "The add-in can be downloaded from http://www.microsoft.com/en-us/download/details.aspx?id=9943"
-		Write-Host "Install the SaveAs PDF add-in and rerun the script."
+		Write-Host "`n`n`t`tWord 2007 is detected and the option to SaveAs PDF was selected but the Word 2007 SaveAs PDF add-in is not installed."
+		Write-Host "`n`n`t`tThe add-in can be downloaded from http://www.microsoft.com/en-us/download/details.aspx?id=9943"
+		Write-Host "`n`n`t`tInstall the SaveAs PDF add-in and rerun the script."
 		Return $False
 	}
 	Return $True
@@ -1441,11 +1566,15 @@ Function AbortScript
 {
 	$Word.quit()
 	Write-Verbose "$(Get-Date): System Cleanup"
-	[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Word) | out-null
-	Remove-Variable -Name word -Scope Global -EA 0
+	[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Word) | Out-Null
+	If(Test-Path variable:global:word)
+	{
+		Remove-Variable -Name word -Scope Global
+	}
 	[gc]::collect() 
 	[gc]::WaitForPendingFinalizers()
 	Write-Verbose "$(Get-Date): Script has been aborted"
+	$ErrorActionPreference = $SaveEAPreference
 	Exit
 }
 
@@ -1455,9 +1584,10 @@ $script:startTime = get-date
 
 Write-Verbose "$(Get-Date): Checking for McliPSSnapin"
 If(!(Check-NeededPSSnapins "McliPSSnapIn")){
-    #We're missing Citrix Snapins that we need
-    Write-Error "Missing Citrix PowerShell Snap-ins Detected, check the console above for more information. Script will now close."
-    Exit
+	#We're missing Citrix Snapins that we need
+	$ErrorActionPreference = $SaveEAPreference
+	Write-Error "Missing Citrix PowerShell Snap-ins Detected, check the console above for more information. Script will now close."
+	Exit
 }
 
 CheckWordPreReq
@@ -1498,6 +1628,7 @@ If(![System.String]::IsNullOrEmpty($AdminAddress))
 	}
 	Else 
 	{
+		$ErrorActionPreference = $SaveEAPreference
 		Write-Warning "Remoting could not be setup to server $($AdminAddress)"
 		Write-Warning "Error returned is " $error[0].FullyQualifiedErrorId.Split(',')[0].Trim()
 		Write-Warning "Script cannot continue"
@@ -1522,6 +1653,7 @@ Else
 
 If($soapserver.Status -ne "Running")
 {
+	$ErrorActionPreference = $SaveEAPreference
 	If($Remoting)
 	{
 		Write-Warning "The Citrix PVS Soap Server service is not Started on server $($AdminAddress)"
@@ -1536,6 +1668,7 @@ If($soapserver.Status -ne "Running")
 
 If($StreamService.Status -ne "Running")
 {
+	$ErrorActionPreference = $SaveEAPreference
 	If($Remoting)
 	{
 		Write-Warning "The Citrix PVS Stream Service service is not Started on server $($AdminAddress)"
@@ -1570,6 +1703,7 @@ If($? -and $error.Count -eq 0)
 } 
 Else 
 {
+	$ErrorActionPreference = $SaveEAPreference
 	Write-Warning "PVS version information could not be retrieved"
 	[int]$NumErrors = $Error.Count
 	For($x=0; $x -le $NumErrors; $x++)
@@ -1598,6 +1732,7 @@ $farm = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 If($Farm -eq $Null)
 {
 	#without farm info, script should not proceed
+	$ErrorActionPreference = $SaveEAPreference
 	Write-Error "PVS Farm information could not be retrieved.  Script is terminating."
 	Exit
 }
@@ -1618,30 +1753,29 @@ $Word = New-Object -comobject "Word.Application" -EA 0
 
 If(!$? -or $Word -eq $Null)
 {
+	$ErrorActionPreference = $SaveEAPreference
 	Write-Warning "The Word object could not be created.  You may need to repair your Word installation."
-	Write-Error "The Word object could not be created.  You may need to repair your Word installation.  Script cannot continue."
+	Write-Error "`n`n`t`tThe Word object could not be created.  You may need to repair your Word installation.`n`n`t`tScript cannot continue.`n`n"
 	Exit
 }
 
 [int]$WordVersion = [int] $Word.Version
 If($WordVersion -eq $wdWord2013)
 {
-	Write-Verbose "$(Get-Date): Running Microsoft Word 2013"
 	$WordProduct = "Word 2013"
 }
 ElseIf($WordVersion -eq $wdWord2010)
 {
-	Write-Verbose "$(Get-Date): Running Microsoft Word 2010"
 	$WordProduct = "Word 2010"
 }
 ElseIf($WordVersion -eq $wdWord2007)
 {
-	Write-Verbose "$(Get-Date): Running Microsoft Word 2007"
 	$WordProduct = "Word 2007"
 }
 Else
 {
-	Write-Error "You are running an untested or unsupported version of Microsoft Word.  Script will end."
+	$ErrorActionPreference = $SaveEAPreference
+	Write-Error "`n`n`t`tYou are running an untested or unsupported version of Microsoft Word.`n`n`t`tScript will end.`n`n`t`tPlease send info on your version of Word to webster@carlwebster.com`n`n"
 	AbortScript
 }
 
@@ -1665,10 +1799,9 @@ If([String]::IsNullOrEmpty($CompanyName))
 	$CompanyName = ValidateCompanyName
 	If([String]::IsNullOrEmpty($CompanyName))
 	{
-		Write-Warning "Company Name cannot be blank."
-		Write-Warning "Check HKCU:\Software\Microsoft\Office\Common\UserInfo for Company or CompanyName value."
-		Write-Error "Script cannot continue.  See messages above."
-		AbortScript
+		Write-Warning "`n`n`t`tCompany Name is blank so Cover Page will not show a Company Name."
+		Write-Warning "`n`t`tCheck HKCU:\Software\Microsoft\Office\Common\UserInfo for Company or CompanyName value."
+		Write-Warning "`n`t`tYou may want to use the -CompanyName parameter if you need a Company Name on the cover page.`n`n"
 	}
 }
 
@@ -1774,7 +1907,8 @@ Write-Verbose "$(Get-Date): Validate cover page"
 $ValidCP = ValidateCoverPage $WordVersion $CoverPage
 If(!$ValidCP)
 {
-	Write-Error "For $WordProduct, $CoverPage is not a valid Cover Page option.  Script cannot continue."
+	$ErrorActionPreference = $SaveEAPreference
+	Write-Error "`n`n`t`tFor $WordProduct, $CoverPage is not a valid Cover Page option.`n`n`t`tScript cannot continue.`n`n"
 	AbortScript
 }
 
@@ -1857,7 +1991,8 @@ $Doc = $Word.Documents.Add()
 If($Doc -eq $Null)
 {
 	Write-Verbose "$(Get-Date): "
-	Write-Error "An empty Word document could not be created.  Script cannot continue."
+	$ErrorActionPreference = $SaveEAPreference
+	Write-Error "`n`n`t`tAn empty Word document could not be created.`n`n`t`tScript cannot continue.`n`n"
 	AbortScript
 }
 
@@ -1865,7 +2000,8 @@ $Selection = $Word.Selection
 If($Selection -eq $Null)
 {
 	Write-Verbose "$(Get-Date): "
-	Write-Error "An unknown error happened selecting the entire Word document for default formatting options.  Script cannot continue."
+	$ErrorActionPreference = $SaveEAPreference
+	Write-Error "`n`n`t`tAn unknown error happened selecting the entire Word document for default formatting options.`n`n`t`tScript cannot continue.`n`n"
 	AbortScript
 }
 
@@ -1886,7 +2022,7 @@ If($BuildingBlocksExist)
 {
 	#insert new page, getting ready for table of contents
 	Write-Verbose "$(Get-Date): Insert new page, getting ready for table of contents"
-	$part.Insert($selection.Range,$True) | out-null
+	$part.Insert($selection.Range,$True) | Out-Null
 	$selection.InsertNewPage()
 
 	#table of contents
@@ -1900,7 +2036,7 @@ If($BuildingBlocksExist)
 	}
 	Else
 	{
-		$toc.insert($selection.Range,$True) | out-null
+		$toc.insert($selection.Range,$True) | Out-Null
 	}
 }
 Else
@@ -1936,11 +2072,9 @@ Write-Verbose "$(Get-Date): Add page numbering"
 $selection.HeaderFooter.PageNumbers.Add($wdAlignPageNumberRight) | Out-Null
 
 #return focus to main document
-Write-Verbose "$(Get-Date): Return focus to main document"
 $doc.ActiveWindow.ActivePane.view.SeekView = $wdSeekMainDocument
 
 #move to the end of the current document
-Write-Verbose "$(Get-Date): Move to the end of the current document"
 Write-Verbose "$(Get-Date)"
 $selection.EndKey($wdStory,$wdMove) | Out-Null
 #end of Jeff Hicks 
@@ -4079,9 +4213,10 @@ ForEach($PVSSite in $PVSSites)
 			}
 			Write-Verbose "$(Get-Date): `t`t`t`tAdd Audit Trail table to doc"
 			$Table = $doc.Tables.Add($TableRange, $Rows, $Columns)
-			$table.Style = "Table Grid"
-			$table.Borders.InsideLineStyle = 0
-			$table.Borders.OutsideLineStyle = 1
+			$Table.rows.first.headingformat = $wdHeadingFormatTrue
+			$Table.Style = $myHash.Word_TableGrid
+			$Table.Borders.InsideLineStyle = $wdLineStyleNone
+			$Table.Borders.OutsideLineStyle = 1
 			$Table.Cell(1,1).Shading.BackgroundPatternColor = $wdColorGray15
 			$Table.Cell(1,1).Range.Font.Bold = $True
 			$Table.Cell(1,1).Range.Font.size = 9
@@ -4310,14 +4445,12 @@ ForEach($PVSSite in $PVSSites)
 				$Table.Cell($xRow,6).Range.Font.size = 9
 				$Table.Cell($xRow,6).Range.Text = $Audit.path
 			}
-			$table.AutoFitBehavior(1)
+			$Table.AutoFitBehavior(1)
 
 			#return focus back to document
-			Write-Verbose "$(Get-Date): `t`tReturn focus back to document"
 			$doc.ActiveWindow.ActivePane.view.SeekView=$wdSeekMainDocument
 
 			#move to the end of the current document
-			Write-Verbose "$(Get-Date): `tMove to the end of the current document"
 			$selection.EndKey($wdStory,$wdMove) | Out-Null
 			Write-Verbose "$(Get-Date):"
 		}
@@ -4486,9 +4619,10 @@ $TableRange = $doc.Application.Selection.Range
 [int]$Rows = $AdvancedItems1.count + 1
 Write-Verbose "$(Get-Date): `t`tAdd Advanced Server Items table to doc"
 $Table = $doc.Tables.Add($TableRange, $Rows, $Columns)
-$table.Style = $myHash.Word_TableGrid
-$table.Borders.InsideLineStyle = 1
-$table.Borders.OutsideLineStyle = 1
+$Table.rows.first.headingformat = $wdHeadingFormatTrue
+$Table.Style = $myHash.Word_TableGrid
+$Table.Borders.InsideLineStyle = $wdLineStyleSingle
+$Table.Borders.OutsideLineStyle = 1
 [int]$xRow = 1
 Write-Verbose "$(Get-Date): `t`tFormat first row with column headings"
 $Table.Cell($xRow,1).Shading.BackgroundPatternColor = $wdColorGray15
@@ -4533,14 +4667,12 @@ ForEach($Item in $AdvancedItems1)
 	$Table.Cell($xRow,9).Range.Text = $Item.nonBlockingIoEnabled
 }
 
-$table.AutoFitBehavior(1)
+$Table.AutoFitBehavior(1)
 
 #return focus back to document
-Write-Verbose "$(Get-Date): `t`tReturn focus back to document"
 $doc.ActiveWindow.ActivePane.view.SeekView = $wdSeekMainDocument
 
 #move to the end of the current document
-Write-Verbose "$(Get-Date): `t`tMove to the end of the current document"
 $selection.EndKey($wdStory,$wdMove) | Out-Null
 Write-Verbose "$(Get-Date): `tFinished Create Appendix A - Advanced Server Items (Server/Network)"
 Write-Verbose "$(Get-Date): "
@@ -4553,9 +4685,10 @@ $TableRange = $doc.Application.Selection.Range
 [int]$Rows = $AdvancedItems2.count + 1
 Write-Verbose "$(Get-Date): `t`tAdd Advanced Server Items table to doc"
 $Table = $doc.Tables.Add($TableRange, $Rows, $Columns)
-$table.Style = $myHash.Word_TableGrid
-$table.Borders.InsideLineStyle = 1
-$table.Borders.OutsideLineStyle = 1
+$Table.rows.first.headingformat = $wdHeadingFormatTrue
+$Table.Style = $myHash.Word_TableGrid
+$Table.Borders.InsideLineStyle = $wdLineStyleSingle
+$Table.Borders.OutsideLineStyle = 1
 [int]$xRow = 1
 Write-Verbose "$(Get-Date): `t`tFormat first row with column headings"
 $Table.Cell($xRow,1).Shading.BackgroundPatternColor = $wdColorGray15
@@ -4588,14 +4721,12 @@ ForEach($Item in $AdvancedItems2)
 	$Table.Cell($xRow,6).Range.Text = $Item.licenseTimeout
 }
 
-$table.AutoFitBehavior(1)
+$Table.AutoFitBehavior(1)
 
 #return focus back to document
-Write-Verbose "$(Get-Date): `t`tReturn focus back to document"
 $doc.ActiveWindow.ActivePane.view.SeekView = $wdSeekMainDocument
 
 #move to the end of the current document
-Write-Verbose "$(Get-Date): `t`tMove to the end of the current document"
 $selection.EndKey($wdStory,$wdMove) | Out-Null
 Write-Verbose "$(Get-Date): `tFinished Create Appendix B - Advanced Server Items (Pacing/Device)"
 Write-Verbose "$(Get-Date): "
@@ -4618,7 +4749,14 @@ If($CoverPagesExist)
 	#get the abstract XML part
 	$ab = $cp.documentelement.ChildNodes | Where {$_.basename -eq "Abstract"}
 	#set the text
-	[string]$abstract = "Citrix Provisioning Services Inventory for $CompanyName"
+	If([String]::IsNullOrEmpty($CompanyName))
+	{
+		[string]$abstract = "Citrix Provisioning Services Inventory"
+	}
+	Else
+	{
+		[string]$abstract = "Citrix Provisioning Services Inventory for $CompanyName"
+	}
 	$ab.Text = $abstract
 
 	$ab = $cp.documentelement.ChildNodes | Where {$_.basename -eq "PublishDate"}
@@ -4706,8 +4844,11 @@ If($PDF)
 	Remove-Item $filename1 -EA 0
 }
 Write-Verbose "$(Get-Date): System Cleanup"
-[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Word) | out-null
-Remove-Variable -Name word -Scope Global -EA 0
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Word) | Out-Null
+If(Test-Path variable:global:word)
+{
+	Remove-Variable -Name word -Scope Global
+}
 [gc]::collect() 
 [gc]::WaitForPendingFinalizers()
 Write-Verbose "$(Get-Date): Script has completed"
