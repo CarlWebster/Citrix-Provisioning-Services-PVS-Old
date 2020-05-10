@@ -92,7 +92,8 @@
 	SaveAs DOCX file
 	This parameter is set True if no other output format is selected.
 .PARAMETER Hardware
-	Use WMI to gather hardware information on: Computer System, Disks, Processor and Network Interface Cards
+	Use WMI to gather hardware information on: Computer System, Disks, Processor and 
+	Network Interface Cards
 	This parameter is disabled by default.
 .PARAMETER AdminAddress
 	Specifies the name of a PVS server that the PowerShell script will connect to. 
@@ -267,9 +268,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: PVS_Inventory_V42.ps1
-	VERSION: 4.28
+	VERSION: 4.29
 	AUTHOR: Carl Webster, Sr. Solutions Architect at Choice Solutions (with a lot of help from Michael B. Smith, Jeff Wouters and Iain Brighton)
-	LASTEDIT: February 13, 2017
+	LASTEDIT: April 7, 2018
 #>
 
 
@@ -413,7 +414,10 @@ Param(
 #
 #Version 4.28 13-Feb-2017
 #	Fixed French wording for Table of Contents 2 (Thanks to David Rouquier)
-
+#
+#Version 4.29 7-Apr-2018
+#	Added Operating System information to Functions GetComputerWMIInfo and OutputComputerItem
+#	Code clean up from Visual Studio Code
 
 Set-StrictMode -Version 2
 
@@ -421,96 +425,6 @@ Set-StrictMode -Version 2
 $PSDefaultParameterValues = @{"*:Verbose"=$True}
 $SaveEAPreference = $ErrorActionPreference
 $ErrorActionPreference = 'SilentlyContinue'
-
-If($PDF -eq $Null)
-{
-	$PDF = $False
-}
-If($MSWord -eq $Null)
-{
-	$MSWord = $False
-}
-If($AddDateTime -eq $Null)
-{
-	$AddDateTime = $False
-}
-If($Hardware -eq $Null)
-{
-	$Hardware = $False
-}
-If($ComputerName -eq $Null)
-{
-	$ComputerName = "LocalHost"
-}
-If($Folder -eq $Null)
-{
-	$Folder = ""
-}
-If($SmtpServer -eq $Null)
-{
-	$SmtpServer = ""
-}
-If($SmtpPort -eq $Null)
-{
-	$SmtpPort = 25
-}
-If($UseSSL -eq $Null)
-{
-	$UseSSL = $False
-}
-If($From -eq $Null)
-{
-	$From = ""
-}
-If($To -eq $Null)
-{
-	$To = ""
-}
-
-If(!(Test-Path Variable:PDF))
-{
-	$PDF = $False
-}
-If(!(Test-Path Variable:MSWord))
-{
-	$MSWord = $False
-}
-If(!(Test-Path Variable:AddDateTime))
-{
-	$AddDateTime = $False
-}
-If(!(Test-Path Variable:Hardware))
-{
-	$Hardware = $False
-}
-If(!(Test-Path Variable:ComputerName))
-{
-	$ComputerName = "LocalHost"
-}
-If(!(Test-Path Variable:Folder))
-{
-	$Folder = ""
-}
-If(!(Test-Path Variable:SmtpServer))
-{
-	$SmtpServer = ""
-}
-If(!(Test-Path Variable:SmtpPort))
-{
-	$SmtpPort = 25
-}
-If(!(Test-Path Variable:UseSSL))
-{
-	$UseSSL = $False
-}
-If(!(Test-Path Variable:From))
-{
-	$From = ""
-}
-If(!(Test-Path Variable:To))
-{
-	$To = ""
-}
 
 If($MSWord -eq $Null)
 {
@@ -738,6 +652,8 @@ Function GetComputerWMIInfo
 	# @kbaggerman on Twitter
 	# http://blog.myvirtualvision.com
 	# modified 1-May-2014 to work in trusted AD Forests and using different domain admin credentials	
+	# modified 17-Aug-2016 to fix a few issues with Text and HTML output
+	# modified 2-Apr-2018 to add ComputerOS information
 
 	#Get Computer info
 	Write-Verbose "$(Get-Date): `t`tProcessing WMI Computer information"
@@ -760,16 +676,17 @@ Function GetComputerWMIInfo
 		$Results = $Null
 	}
 	
-	If($? -and $Results -ne $Null)
+	If($? -and $Null -ne $Results)
 	{
-		$ComputerItems = $Results | Select Manufacturer, Model, Domain, `
+		$ComputerItems = $Results | Select-Object Manufacturer, Model, Domain, `
 		@{N="TotalPhysicalRam"; E={[math]::round(($_.TotalPhysicalMemory / 1GB),0)}}, `
 		NumberOfProcessors, NumberOfLogicalProcessors
 		$Results = $Null
+		[string]$ComputerOS = (Get-WmiObject -class Win32_OperatingSystem -computername $RemoteComputerName -EA 0).Caption
 
 		ForEach($Item in $ComputerItems)
 		{
-			OutputComputerItem $Item
+			OutputComputerItem $Item $ComputerOS
 		}
 	}
 	ElseIf(!$?)
@@ -813,9 +730,9 @@ Function GetComputerWMIInfo
 		$Results = $Null
 	}
 
-	If($? -and $Results -ne $Null)
+	If($? -and $Null -ne $Results)
 	{
-		$drives = $Results | Select caption, @{N="drivesize"; E={[math]::round(($_.size / 1GB),0)}}, 
+		$drives = $Results | Select-Object caption, @{N="drivesize"; E={[math]::round(($_.size / 1GB),0)}}, 
 		filesystem, @{N="drivefreespace"; E={[math]::round(($_.freespace / 1GB),0)}}, 
 		volumename, drivetype, volumedirty, volumeserialnumber
 		$Results = $Null
@@ -869,9 +786,9 @@ Function GetComputerWMIInfo
 		$Results = $Null
 	}
 
-	If($? -and $Results -ne $Null)
+	If($? -and $Null -ne $Results)
 	{
-		$Processors = $Results | Select availability, name, description, maxclockspeed, 
+		$Processors = $Results | Select-Object availability, name, description, maxclockspeed, 
 		l2cachesize, l3cachesize, numberofcores, numberoflogicalprocessors
 		$Results = $Null
 		ForEach($processor in $processors)
@@ -917,12 +834,12 @@ Function GetComputerWMIInfo
 	
 	Catch
 	{
-		$Results
+		$Results = $Null
 	}
 
-	If($? -and $Results -ne $Null)
+	If($? -and $Null -ne $Results)
 	{
-		$Nics = $Results | Where {$_.ipaddress -ne $Null}
+		$Nics = $Results | Where-Object {$Null -ne $_.ipaddress}
 		$Results = $Null
 
 		If($Nics -eq $Null ) 
@@ -940,7 +857,7 @@ Function GetComputerWMIInfo
 			{
 				Try
 				{
-					$ThisNic = Get-WmiObject -computername $RemoteComputerName win32_networkadapter | Where {$_.index -eq $nic.index}
+					$ThisNic = Get-WmiObject -computername $RemoteComputerName win32_networkadapter | Where-Object {$_.index -eq $nic.index}
 				}
 				
 				Catch 
@@ -948,7 +865,7 @@ Function GetComputerWMIInfo
 					$ThisNic = $Null
 				}
 				
-				If($? -and $ThisNic -ne $Null)
+				If($? -and $Null -ne $ThisNic)
 				{
 					OutputNicItem $Nic $ThisNic
 				}
@@ -1004,23 +921,20 @@ Function GetComputerWMIInfo
 	{
 		WriteWordLine 0 0 ""
 	}
-
-	$Results = $Null
-	$ComputerItems = $Null
-	$Drives = $Null
-	$Processors = $Null
-	$Nics = $Null
 }
 
 Function OutputComputerItem
 {
-	Param([object]$Item)
+	Param([object]$Item, [string]$OS)
+	# modified 2-Apr-2018 to add Operating System information
+	
 	If($MSWord -or $PDF)
 	{
 		[System.Collections.Hashtable[]] $ItemInformation = @()
 		$ItemInformation += @{ Data = "Manufacturer"; Value = $Item.manufacturer; }
 		$ItemInformation += @{ Data = "Model"; Value = $Item.model; }
 		$ItemInformation += @{ Data = "Domain"; Value = $Item.domain; }
+		$ItemInformation += @{ Data = "Operating System"; Value = $OS; }
 		$ItemInformation += @{ Data = "Total Ram"; Value = "$($Item.totalphysicalram) GB"; }
 		$ItemInformation += @{ Data = "Physical Processors (sockets)"; Value = $Item.NumberOfProcessors; }
 		$ItemInformation += @{ Data = "Logical Processors (cores w/HT)"; Value = $Item.NumberOfLogicalProcessors; }
@@ -1037,6 +951,81 @@ Function OutputComputerItem
 		$Table.Columns.Item(2).Width = 200;
 
 		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
+
+		FindWordDocumentEnd
+		$Table = $Null
+		WriteWordLine 0 0 ""
+	}
+}
+
+Function OutputDriveItem
+{
+	Param([object]$Drive)
+	
+	$xDriveType = ""
+	Switch ($drive.drivetype)
+	{
+		0	{$xDriveType = "Unknown"; Break}
+		1	{$xDriveType = "No Root Directory"; Break}
+		2	{$xDriveType = "Removable Disk"; Break}
+		3	{$xDriveType = "Local Disk"; Break}
+		4	{$xDriveType = "Network Drive"; Break}
+		5	{$xDriveType = "Compact Disc"; Break}
+		6	{$xDriveType = "RAM Disk"; Break}
+		Default {$xDriveType = "Unknown"; Break}
+	}
+	
+	$xVolumeDirty = ""
+	If(![String]::IsNullOrEmpty($drive.volumedirty))
+	{
+		If($drive.volumedirty)
+		{
+			$xVolumeDirty = "Yes"
+		}
+		Else
+		{
+			$xVolumeDirty = "No"
+		}
+	}
+
+	If($MSWORD -or $PDF)
+	{
+		[System.Collections.Hashtable[]] $DriveInformation = @()
+		$DriveInformation += @{Data = "Caption"; Value = $Drive.caption; }
+		$DriveInformation += @{Data = "Size"; Value = "$($drive.drivesize) GB"; }
+		If(![String]::IsNullOrEmpty($drive.filesystem))
+		{
+			$DriveInformation += @{Data = "File System"; Value = $Drive.filesystem; }
+		}
+		$DriveInformation += @{Data = "Free Space"; Value = "$($drive.drivefreespace) GB"; }
+		If(![String]::IsNullOrEmpty($drive.volumename))
+		{
+			$DriveInformation += @{Data = "Volume Name"; Value = $Drive.volumename; }
+		}
+		If(![String]::IsNullOrEmpty($drive.volumedirty))
+		{
+			$DriveInformation += @{Data = "Volume is Dirty"; Value = $xVolumeDirty; }
+		}
+		If(![String]::IsNullOrEmpty($drive.volumeserialnumber))
+		{
+			$DriveInformation += @{Data = "Volume Serial Number"; Value = $Drive.volumeserialnumber; }
+		}
+		$DriveInformation += @{Data = "Drive Type"; Value = $xDriveType; }
+		$Table = AddWordTable -Hashtable $DriveInformation `
+		-Columns Data,Value `
+		-List `
+		-AutoFit $wdAutoFitFixed;
+
+		## Set first column format
+		SetWordCellFormat -Collection $Table.Columns.Item(1).Cells `
+		-Bold `
+		-BackgroundColor $wdColorGray15;
+
+		## IB - set column widths without recursion
+		$Table.Columns.Item(1).Width = 150;
+		$Table.Columns.Item(2).Width = 200;
+
+		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
 
 		FindWordDocumentEnd
 		$Table = $Null
@@ -1193,7 +1182,7 @@ Function OutputNicItem
 {
 	Param([object]$Nic, [object]$ThisNic)
 	
-	$powerMgmt = Get-WmiObject MSPower_DeviceEnable -Namespace root\wmi | where {$_.InstanceName -match [regex]::Escape($ThisNic.PNPDeviceID)}
+	$powerMgmt = Get-WmiObject MSPower_DeviceEnable -Namespace root\wmi | Where-Object {$_.InstanceName -match [regex]::Escape($ThisNic.PNPDeviceID)}
 
 	If($? -and $Null -ne $powerMgmt)
 	{
@@ -1797,7 +1786,7 @@ Function CheckWordPrereq
 	$SessionID = (Get-Process -PID $PID).SessionId
 	
 	#Find out if winword is running in our session
-	[bool]$wordrunning = ((Get-Process 'WinWord' -ea 0)|?{$_.SessionId -eq $SessionID}) -ne $Null
+	[bool]$wordrunning = ((Get-Process 'WinWord' -ea 0) | Where-Object {$_.SessionId -eq $SessionID}) -ne $Null
 	If($wordrunning)
 	{
 		$ErrorActionPreference = $SaveEAPreference
@@ -1991,8 +1980,8 @@ Function Check-NeededPSSnapins
 	$RegisteredSnapins = @()
 
 	#Creates arrays of strings, rather than objects, we're passing strings so this will be more robust.
-	$loadedSnapins += get-pssnapin | % {$_.name}
-	$registeredSnapins += get-pssnapin -Registered | % {$_.name}
+	$loadedSnapins += get-pssnapin | ForEach-Object {$_.name}
+	$registeredSnapins += get-pssnapin -Registered | ForEach-Object {$_.name}
 
 	ForEach($Snapin in $Snapins)
 	{
@@ -2022,7 +2011,7 @@ Function Check-NeededPSSnapins
 	If($FoundMissingSnapin)
 	{
 		Write-Warning "Missing Windows PowerShell snap-ins Detected:"
-		$missingSnapins | % {Write-Warning "($_)"}
+		$missingSnapins | ForEach-Object {Write-Warning "($_)"}
 		return $False
 	}
 	Else
@@ -2105,7 +2094,7 @@ Function _SetDocumentProperty
 	#jeff hicks
 	Param([object]$Properties,[string]$Name,[string]$Value)
 	#get the property object
-	$prop = $properties | ForEach { 
+	$prop = $properties | ForEach-Object { 
 		$propname=$_.GetType().InvokeMember("Name","GetProperty",$Null,$_,$Null)
 		If($propname -eq $Name) 
 		{
@@ -2619,9 +2608,9 @@ Function validStateProp( [object] $object, [string] $topLevel, [string] $secondL
 	#function created 8-jan-2014 by Michael B. Smith
 	if( $object )
 	{
-		If( ( gm -Name $topLevel -InputObject $object ) )
+		If( ( Get-Member -Name $topLevel -InputObject $object ) )
 		{
-			If( ( gm -Name $secondLevel -InputObject $object.$topLevel ) )
+			If( ( Get-Member -Name $secondLevel -InputObject $object.$topLevel ) )
 			{
 				Return $True
 			}
@@ -2849,13 +2838,13 @@ Function SetupWord
 
 	$Script:Word.Templates.LoadBuildingBlocks()
 	#word 2010/2013/2016
-	$BuildingBlocksCollection = $Script:Word.Templates | Where {$_.name -eq "Built-In Building Blocks.dotx"}
+	$BuildingBlocksCollection = $Script:Word.Templates | Where-Object {$_.name -eq "Built-In Building Blocks.dotx"}
 
 	Write-Verbose "$(Get-Date): Attempt to load cover page $($CoverPage)"
 	$part = $Null
 
 	$BuildingBlocksCollection | 
-	ForEach{
+	ForEach-Object {
 		If ($_.BuildingBlockEntries.Item($CoverPage).Name -eq $CoverPage) 
 		{
 			$BuildingBlocks = $_
@@ -2995,10 +2984,10 @@ Function UpdateDocumentProperties
 			_SetDocumentProperty $Script:Doc.BuiltInDocumentProperties "Subject" $SubjectTitle
 
 			#Get the Coverpage XML part
-			$cp = $Script:Doc.CustomXMLParts | Where {$_.NamespaceURI -match "coverPageProps$"}
+			$cp = $Script:Doc.CustomXMLParts | Where-Object {$_.NamespaceURI -match "coverPageProps$"}
 
 			#get the abstract XML part
-			$ab = $cp.documentelement.ChildNodes | Where {$_.basename -eq "Abstract"}
+			$ab = $cp.documentelement.ChildNodes | Where-Object {$_.basename -eq "Abstract"}
 
 			#set the text
 			If([String]::IsNullOrEmpty($Script:CoName))
@@ -3012,7 +3001,7 @@ Function UpdateDocumentProperties
 
 			$ab.Text = $abstract
 
-			$ab = $cp.documentelement.ChildNodes | Where {$_.basename -eq "PublishDate"}
+			$ab = $cp.documentelement.ChildNodes | Where-Object {$_.basename -eq "PublishDate"}
 			#set the text
 			[string]$abstract = (Get-Date -Format d).ToString()
 			$ab.Text = $abstract
@@ -4493,7 +4482,6 @@ ForEach($PVSSite in $PVSSites)
 				#get versions info
 				#thanks to the PVS Product team for their help in understanding the Versions information
 				Write-Verbose "$(Get-Date): `t`t`tProcessing vDisk Versions"
-				$VersionsObjects = @()
 				$error.Clear()
 				$MCLIGetResult = Mcli-Get DiskVersion -p diskLocatorName="$($Disk.diskLocatorName)",storeName="$($disk.storeName)",siteName="$($disk.siteName)"
 				If($error.Count -eq 0)
@@ -5445,7 +5433,6 @@ ForEach($PVSSite in $PVSSites)
 	
 	#add Audit Trail
 	Write-Verbose "$(Get-Date): `t`t`tProcessing Audit Trail"
-	$AuditTrailObjects = @()
 	$error.Clear()
 	
 	#the audittrail call requires the dates in YYYY/MM/DD format
@@ -5513,185 +5500,182 @@ ForEach($PVSSite in $PVSSites)
 			
 			ForEach($Audit in $Audits)
 			{
-				$Tmp = ""
+				$TmpAction = ""
 				Switch([int]$Audit.action)
 				{
-					1 { $Tmp = "AddAuthGroup"; Break }
-					2 { $Tmp = "AddCollection"; Break }
-					3 { $Tmp = "AddDevice"; Break }
-					4 { $Tmp = "AddDiskLocator"; Break }
-					5 { $Tmp = "AddFarmView"; Break }
-					6 { $Tmp = "AddServer"; Break }
-					7 { $Tmp = "AddSite"; Break }
-					8 { $Tmp = "AddSiteView"; Break }
-					9 { $Tmp = "AddStore"; Break }
-					10 { $Tmp = "AddUserGroup"; Break }
-					11 { $Tmp = "AddVirtualHostingPool"; Break }
-					12 { $Tmp = "AddUpdateTask"; Break }
-					13 { $Tmp = "AddDiskUpdateDevice"; Break }
-					1001 { $Tmp = "DeleteAuthGroup"; Break }
-					1002 { $Tmp = "DeleteCollection"; Break }
-					1003 { $Tmp = "DeleteDevice"; Break }
-					1004 { $Tmp = "DeleteDeviceDiskCacheFile"; Break }
-					1005 { $Tmp = "DeleteDiskLocator"; Break }
-					1006 { $Tmp = "DeleteFarmView"; Break }
-					1007 { $Tmp = "DeleteServer"; Break }
-					1008 { $Tmp = "DeleteServerStore"; Break }
-					1009 { $Tmp = "DeleteSite"; Break }
-					1010 { $Tmp = "DeleteSiteView"; Break }
-					1011 { $Tmp = "DeleteStore"; Break }
-					1012 { $Tmp = "DeleteUserGroup"; Break }
-					1013 { $Tmp = "DeleteVirtualHostingPool"; Break }
-					1014 { $Tmp = "DeleteUpdateTask"; Break }
-					1015 { $Tmp = "DeleteDiskUpdateDevice"; Break }
-					1016 { $Tmp = "DeleteDiskVersion"; Break }
-					2001 { $Tmp = "RunAddDeviceToDomain"; Break }
-					2002 { $Tmp = "RunApplyAutoUpdate"; Break }
-					2003 { $Tmp = "RunApplyIncrementalUpdate"; Break }
-					2004 { $Tmp = "RunArchiveAuditTrail"; Break }
-					2005 { $Tmp = "RunAssignAuthGroup"; Break }
-					2006 { $Tmp = "RunAssignDevice"; Break }
-					2007 { $Tmp = "RunAssignDiskLocator"; Break }
-					2008 { $Tmp = "RunAssignServer"; Break }
-					2009 { $Tmp = "RunBoot"; Break }
-					2010 { $Tmp = "RunCopyPasteDevice"; Break }
-					2011 { $Tmp = "RunCopyPasteDisk"; Break }
-					2012 { $Tmp = "RunCopyPasteServer"; Break }
-					2013 { $Tmp = "RunCreateDirectory"; Break }
-					2014 { $Tmp = "RunCreateDiskCancel"; Break }
-					2015 { $Tmp = "RunDisableCollection"; Break }
-					2016 { $Tmp = "RunDisableDevice"; Break }
-					2017 { $Tmp = "RunDisableDeviceDiskLocator"; Break }
-					2018 { $Tmp = "RunDisableDiskLocator"; Break }
-					2019 { $Tmp = "RunDisableUserGroup"; Break }
-					2020 { $Tmp = "RunDisableUserGroupDiskLocator"; Break }
-					2021 { $Tmp = "RunDisplayMessage"; Break }
-					2022 { $Tmp = "RunEnableCollection"; Break }
-					2023 { $Tmp = "RunEnableDevice"; Break }
-					2024 { $Tmp = "RunEnableDeviceDiskLocator"; Break }
-					2025 { $Tmp = "RunEnableDiskLocator"; Break }
-					2026 { $Tmp = "RunEnableUserGroup"; Break }
-					2027 { $Tmp = "RunEnableUserGroupDiskLocator"; Break }
-					2028 { $Tmp = "RunExportOemLicenses"; Break }
-					2029 { $Tmp = "RunImportDatabase"; Break }
-					2030 { $Tmp = "RunImportDevices"; Break }
-					2031 { $Tmp = "RunImportOemLicenses"; Break }
-					2032 { $Tmp = "RunMarkDown"; Break }
-					2033 { $Tmp = "RunReboot"; Break }
-					2034 { $Tmp = "RunRemoveAuthGroup"; Break }
-					2035 { $Tmp = "RunRemoveDevice"; Break }
-					2036 { $Tmp = "RunRemoveDeviceFromDomain"; Break }
-					2037 { $Tmp = "RunRemoveDirectory"; Break }
-					2038 { $Tmp = "RunRemoveDiskLocator"; Break }
-					2039 { $Tmp = "RunResetDeviceForDomain"; Break }
-					2040 { $Tmp = "RunResetDatabaseConnection"; Break }
-					2041 { $Tmp = "RunRestartStreamingService"; Break }
-					2042 { $Tmp = "RunShutdown"; Break }
-					2043 { $Tmp = "RunStartStreamingService"; Break }
-					2044 { $Tmp = "RunStopStreamingService"; Break }
-					2045 { $Tmp = "RunUnlockAllDisk"; Break }
-					2046 { $Tmp = "RunUnlockDisk"; Break }
-					2047 { $Tmp = "RunServerStoreVolumeAccess"; Break }
-					2048 { $Tmp = "RunServerStoreVolumeMode"; Break }
-					2049 { $Tmp = "RunMergeDisk"; Break }
-					2050 { $Tmp = "RunRevertDiskVersion"; Break }
-					2051 { $Tmp = "RunPromoteDiskVersion"; Break }
-					2052 { $Tmp = "RunCancelDiskMaintenance"; Break }
-					2053 { $Tmp = "RunActivateDevice"; Break }
-					2054 { $Tmp = "RunAddDiskVersion"; Break }
-					2055 { $Tmp = "RunExportDisk"; Break }
-					2056 { $Tmp = "RunAssignDisk"; Break }
-					2057 { $Tmp = "RunRemoveDisk"; Break }
-					2057 { $Tmp = "RunDiskUpdateStart"; Break }
-					2057 { $Tmp = "RunDiskUpdateCancel"; Break }
-					2058 { $Tmp = "RunSetOverrideVersion"; Break }
-					2059 { $Tmp = "RunCancelTask"; Break }
-					2060 { $Tmp = "RunClearTask"; Break }
-					3001 { $Tmp = "RunWithReturnCreateDisk"; Break }
-					3002 { $Tmp = "RunWithReturnCreateDiskStatus"; Break }
-					3003 { $Tmp = "RunWithReturnMapDisk"; Break }
-					3004 { $Tmp = "RunWithReturnRebalanceDevices"; Break }
-					3005 { $Tmp = "RunWithReturnCreateMaintenanceVersion"; Break }
-					3006 { $Tmp = "RunWithReturnImportDisk"; Break }
-					4001 { $Tmp = "RunByteArrayInputImportDevices"; Break }
-					4002 { $Tmp = "RunByteArrayInputImportOemLicenses"; Break }
-					5001 { $Tmp = "RunByteArrayOutputArchiveAuditTrail"; Break }
-					5002 { $Tmp = "RunByteArrayOutputExportOemLicenses"; Break }
-					6001 { $Tmp = "SetAuthGroup"; Break }
-					6002 { $Tmp = "SetCollection"; Break }
-					6003 { $Tmp = "SetDevice"; Break }
-					6004 { $Tmp = "SetDisk"; Break }
-					6005 { $Tmp = "SetDiskLocator"; Break }
-					6006 { $Tmp = "SetFarm"; Break }
-					6007 { $Tmp = "SetFarmView"; Break }
-					6008 { $Tmp = "SetServer"; Break }
-					6009 { $Tmp = "SetServerBiosBootstrap"; Break }
-					6010 { $Tmp = "SetServerBootstrap"; Break }
-					6011 { $Tmp = "SetServerStore"; Break }
-					6012 { $Tmp = "SetSite"; Break }
-					6013 { $Tmp = "SetSiteView"; Break }
-					6014 { $Tmp = "SetStore"; Break }
-					6015 { $Tmp = "SetUserGroup"; Break }
-					6016 { $Tmp = "SetVirtualHostingPool"; Break }
-					6017 { $Tmp = "SetUpdateTask"; Break }
-					6018 { $Tmp = "SetDiskUpdateDevice"; Break }
-					7001 { $Tmp = "SetListDeviceBootstraps"; Break }
-					7002 { $Tmp = "SetListDeviceBootstrapsDelete"; Break }
-					7003 { $Tmp = "SetListDeviceBootstrapsAdd"; Break }
-					7004 { $Tmp = "SetListDeviceCustomProperty"; Break }
-					7005 { $Tmp = "SetListDeviceCustomPropertyDelete"; Break }
-					7006 { $Tmp = "SetListDeviceCustomPropertyAdd"; Break }
-					7007 { $Tmp = "SetListDeviceDiskPrinters"; Break }
-					7008 { $Tmp = "SetListDeviceDiskPrintersDelete"; Break }
-					7009 { $Tmp = "SetListDeviceDiskPrintersAdd"; Break }
-					7010 { $Tmp = "SetListDevicePersonality"; Break }
-					7011 { $Tmp = "SetListDevicePersonalityDelete"; Break }
-					7012 { $Tmp = "SetListDevicePersonalityAdd"; Break }
-					7013 { $Tmp = "SetListDevicePortBlockerCategories"; Break }
-					7014 { $Tmp = "SetListDevicePortBlockerCategoriesDelete"; Break }
-					7015 { $Tmp = "SetListDevicePortBlockerCategoriesAdd"; Break }
-					7016 { $Tmp = "SetListDevicePortBlockerOverrides"; Break }
-					7017 { $Tmp = "SetListDevicePortBlockerOverridesDelete"; Break }
-					7018 { $Tmp = "SetListDevicePortBlockerOverridesAdd"; Break }
-					7019 { $Tmp = "SetListDiskLocatorCustomProperty"; Break }
-					7020 { $Tmp = "SetListDiskLocatorCustomPropertyDelete"; Break }
-					7021 { $Tmp = "SetListDiskLocatorCustomPropertyAdd"; Break }
-					7022 { $Tmp = "SetListDiskLocatorPortBlockerCategories"; Break }
-					7023 { $Tmp = "SetListDiskLocatorPortBlockerCategoriesDelete"; Break }
-					7024 { $Tmp = "SetListDiskLocatorPortBlockerCategoriesAdd"; Break }
-					7025 { $Tmp = "SetListDiskLocatorPortBlockerOverrides"; Break }
-					7026 { $Tmp = "SetListDiskLocatorPortBlockerOverridesDelete"; Break }
-					7027 { $Tmp = "SetListDiskLocatorPortBlockerOverridesAdd"; Break }
-					7028 { $Tmp = "SetListServerCustomProperty"; Break }
-					7029 { $Tmp = "SetListServerCustomPropertyDelete"; Break }
-					7030 { $Tmp = "SetListServerCustomPropertyAdd"; Break }
-					7031 { $Tmp = "SetListUserGroupCustomProperty"; Break }
-					7032 { $Tmp = "SetListUserGroupCustomPropertyDelete"; Break }
-					7033 { $Tmp = "SetListUserGroupCustomPropertyAdd"; Break }				
-					Default {$Tmp = "Unknown"; Break }
+					1 { $TmpAction = "AddAuthGroup"; Break }
+					2 { $TmpAction = "AddCollection"; Break }
+					3 { $TmpAction = "AddDevice"; Break }
+					4 { $TmpAction = "AddDiskLocator"; Break }
+					5 { $TmpAction = "AddFarmView"; Break }
+					6 { $TmpAction = "AddServer"; Break }
+					7 { $TmpAction = "AddSite"; Break }
+					8 { $TmpAction = "AddSiteView"; Break }
+					9 { $TmpAction = "AddStore"; Break }
+					10 { $TmpAction = "AddUserGroup"; Break }
+					11 { $TmpAction = "AddVirtualHostingPool"; Break }
+					12 { $TmpAction = "AddUpdateTask"; Break }
+					13 { $TmpAction = "AddDiskUpdateDevice"; Break }
+					1001 { $TmpAction = "DeleteAuthGroup"; Break }
+					1002 { $TmpAction = "DeleteCollection"; Break }
+					1003 { $TmpAction = "DeleteDevice"; Break }
+					1004 { $TmpAction = "DeleteDeviceDiskCacheFile"; Break }
+					1005 { $TmpAction = "DeleteDiskLocator"; Break }
+					1006 { $TmpAction = "DeleteFarmView"; Break }
+					1007 { $TmpAction = "DeleteServer"; Break }
+					1008 { $TmpAction = "DeleteServerStore"; Break }
+					1009 { $TmpAction = "DeleteSite"; Break }
+					1010 { $TmpAction = "DeleteSiteView"; Break }
+					1011 { $TmpAction = "DeleteStore"; Break }
+					1012 { $TmpAction = "DeleteUserGroup"; Break }
+					1013 { $TmpAction = "DeleteVirtualHostingPool"; Break }
+					1014 { $TmpAction = "DeleteUpdateTask"; Break }
+					1015 { $TmpAction = "DeleteDiskUpdateDevice"; Break }
+					1016 { $TmpAction = "DeleteDiskVersion"; Break }
+					2001 { $TmpAction = "RunAddDeviceToDomain"; Break }
+					2002 { $TmpAction = "RunApplyAutoUpdate"; Break }
+					2003 { $TmpAction = "RunApplyIncrementalUpdate"; Break }
+					2004 { $TmpAction = "RunArchiveAuditTrail"; Break }
+					2005 { $TmpAction = "RunAssignAuthGroup"; Break }
+					2006 { $TmpAction = "RunAssignDevice"; Break }
+					2007 { $TmpAction = "RunAssignDiskLocator"; Break }
+					2008 { $TmpAction = "RunAssignServer"; Break }
+					2009 { $TmpAction = "RunBoot"; Break }
+					2010 { $TmpAction = "RunCopyPasteDevice"; Break }
+					2011 { $TmpAction = "RunCopyPasteDisk"; Break }
+					2012 { $TmpAction = "RunCopyPasteServer"; Break }
+					2013 { $TmpAction = "RunCreateDirectory"; Break }
+					2014 { $TmpAction = "RunCreateDiskCancel"; Break }
+					2015 { $TmpAction = "RunDisableCollection"; Break }
+					2016 { $TmpAction = "RunDisableDevice"; Break }
+					2017 { $TmpAction = "RunDisableDeviceDiskLocator"; Break }
+					2018 { $TmpAction = "RunDisableDiskLocator"; Break }
+					2019 { $TmpAction = "RunDisableUserGroup"; Break }
+					2020 { $TmpAction = "RunDisableUserGroupDiskLocator"; Break }
+					2021 { $TmpAction = "RunDisplayMessage"; Break }
+					2022 { $TmpAction = "RunEnableCollection"; Break }
+					2023 { $TmpAction = "RunEnableDevice"; Break }
+					2024 { $TmpAction = "RunEnableDeviceDiskLocator"; Break }
+					2025 { $TmpAction = "RunEnableDiskLocator"; Break }
+					2026 { $TmpAction = "RunEnableUserGroup"; Break }
+					2027 { $TmpAction = "RunEnableUserGroupDiskLocator"; Break }
+					2028 { $TmpAction = "RunExportOemLicenses"; Break }
+					2029 { $TmpAction = "RunImportDatabase"; Break }
+					2030 { $TmpAction = "RunImportDevices"; Break }
+					2031 { $TmpAction = "RunImportOemLicenses"; Break }
+					2032 { $TmpAction = "RunMarkDown"; Break }
+					2033 { $TmpAction = "RunReboot"; Break }
+					2034 { $TmpAction = "RunRemoveAuthGroup"; Break }
+					2035 { $TmpAction = "RunRemoveDevice"; Break }
+					2036 { $TmpAction = "RunRemoveDeviceFromDomain"; Break }
+					2037 { $TmpAction = "RunRemoveDirectory"; Break }
+					2038 { $TmpAction = "RunRemoveDiskLocator"; Break }
+					2039 { $TmpAction = "RunResetDeviceForDomain"; Break }
+					2040 { $TmpAction = "RunResetDatabaseConnection"; Break }
+					2041 { $TmpAction = "RunRestartStreamingService"; Break }
+					2042 { $TmpAction = "RunShutdown"; Break }
+					2043 { $TmpAction = "RunStartStreamingService"; Break }
+					2044 { $TmpAction = "RunStopStreamingService"; Break }
+					2045 { $TmpAction = "RunUnlockAllDisk"; Break }
+					2046 { $TmpAction = "RunUnlockDisk"; Break }
+					2047 { $TmpAction = "RunServerStoreVolumeAccess"; Break }
+					2048 { $TmpAction = "RunServerStoreVolumeMode"; Break }
+					2049 { $TmpAction = "RunMergeDisk"; Break }
+					2050 { $TmpAction = "RunRevertDiskVersion"; Break }
+					2051 { $TmpAction = "RunPromoteDiskVersion"; Break }
+					2052 { $TmpAction = "RunCancelDiskMaintenance"; Break }
+					2053 { $TmpAction = "RunActivateDevice"; Break }
+					2054 { $TmpAction = "RunAddDiskVersion"; Break }
+					2055 { $TmpAction = "RunExportDisk"; Break }
+					2056 { $TmpAction = "RunAssignDisk"; Break }
+					2057 { $TmpAction = "RunRemoveDisk"; Break }
+					2057 { $TmpAction = "RunDiskUpdateStart"; Break }
+					2057 { $TmpAction = "RunDiskUpdateCancel"; Break }
+					2058 { $TmpAction = "RunSetOverrideVersion"; Break }
+					2059 { $TmpAction = "RunCancelTask"; Break }
+					2060 { $TmpAction = "RunClearTask"; Break }
+					3001 { $TmpAction = "RunWithReturnCreateDisk"; Break }
+					3002 { $TmpAction = "RunWithReturnCreateDiskStatus"; Break }
+					3003 { $TmpAction = "RunWithReturnMapDisk"; Break }
+					3004 { $TmpAction = "RunWithReturnRebalanceDevices"; Break }
+					3005 { $TmpAction = "RunWithReturnCreateMaintenanceVersion"; Break }
+					3006 { $TmpAction = "RunWithReturnImportDisk"; Break }
+					4001 { $TmpAction = "RunByteArrayInputImportDevices"; Break }
+					4002 { $TmpAction = "RunByteArrayInputImportOemLicenses"; Break }
+					5001 { $TmpAction = "RunByteArrayOutputArchiveAuditTrail"; Break }
+					5002 { $TmpAction = "RunByteArrayOutputExportOemLicenses"; Break }
+					6001 { $TmpAction = "SetAuthGroup"; Break }
+					6002 { $TmpAction = "SetCollection"; Break }
+					6003 { $TmpAction = "SetDevice"; Break }
+					6004 { $TmpAction = "SetDisk"; Break }
+					6005 { $TmpAction = "SetDiskLocator"; Break }
+					6006 { $TmpAction = "SetFarm"; Break }
+					6007 { $TmpAction = "SetFarmView"; Break }
+					6008 { $TmpAction = "SetServer"; Break }
+					6009 { $TmpAction = "SetServerBiosBootstrap"; Break }
+					6010 { $TmpAction = "SetServerBootstrap"; Break }
+					6011 { $TmpAction = "SetServerStore"; Break }
+					6012 { $TmpAction = "SetSite"; Break }
+					6013 { $TmpAction = "SetSiteView"; Break }
+					6014 { $TmpAction = "SetStore"; Break }
+					6015 { $TmpAction = "SetUserGroup"; Break }
+					6016 { $TmpAction = "SetVirtualHostingPool"; Break }
+					6017 { $TmpAction = "SetUpdateTask"; Break }
+					6018 { $TmpAction = "SetDiskUpdateDevice"; Break }
+					7001 { $TmpAction = "SetListDeviceBootstraps"; Break }
+					7002 { $TmpAction = "SetListDeviceBootstrapsDelete"; Break }
+					7003 { $TmpAction = "SetListDeviceBootstrapsAdd"; Break }
+					7004 { $TmpAction = "SetListDeviceCustomProperty"; Break }
+					7005 { $TmpAction = "SetListDeviceCustomPropertyDelete"; Break }
+					7006 { $TmpAction = "SetListDeviceCustomPropertyAdd"; Break }
+					7007 { $TmpAction = "SetListDeviceDiskPrinters"; Break }
+					7008 { $TmpAction = "SetListDeviceDiskPrintersDelete"; Break }
+					7009 { $TmpAction = "SetListDeviceDiskPrintersAdd"; Break }
+					7010 { $TmpAction = "SetListDevicePersonality"; Break }
+					7011 { $TmpAction = "SetListDevicePersonalityDelete"; Break }
+					7012 { $TmpAction = "SetListDevicePersonalityAdd"; Break }
+					7013 { $TmpAction = "SetListDevicePortBlockerCategories"; Break }
+					7014 { $TmpAction = "SetListDevicePortBlockerCategoriesDelete"; Break }
+					7015 { $TmpAction = "SetListDevicePortBlockerCategoriesAdd"; Break }
+					7016 { $TmpAction = "SetListDevicePortBlockerOverrides"; Break }
+					7017 { $TmpAction = "SetListDevicePortBlockerOverridesDelete"; Break }
+					7018 { $TmpAction = "SetListDevicePortBlockerOverridesAdd"; Break }
+					7019 { $TmpAction = "SetListDiskLocatorCustomProperty"; Break }
+					7020 { $TmpAction = "SetListDiskLocatorCustomPropertyDelete"; Break }
+					7021 { $TmpAction = "SetListDiskLocatorCustomPropertyAdd"; Break }
+					7022 { $TmpAction = "SetListDiskLocatorPortBlockerCategories"; Break }
+					7023 { $TmpAction = "SetListDiskLocatorPortBlockerCategoriesDelete"; Break }
+					7024 { $TmpAction = "SetListDiskLocatorPortBlockerCategoriesAdd"; Break }
+					7025 { $TmpAction = "SetListDiskLocatorPortBlockerOverrides"; Break }
+					7026 { $TmpAction = "SetListDiskLocatorPortBlockerOverridesDelete"; Break }
+					7027 { $TmpAction = "SetListDiskLocatorPortBlockerOverridesAdd"; Break }
+					7028 { $TmpAction = "SetListServerCustomProperty"; Break }
+					7029 { $TmpAction = "SetListServerCustomPropertyDelete"; Break }
+					7030 { $TmpAction = "SetListServerCustomPropertyAdd"; Break }
+					7031 { $TmpAction = "SetListUserGroupCustomProperty"; Break }
+					7032 { $TmpAction = "SetListUserGroupCustomPropertyDelete"; Break }
+					7033 { $TmpAction = "SetListUserGroupCustomPropertyAdd"; Break }				
+					Default {$TmpAction = "Unknown"; Break }
 				}
-				$TmpAction = $Tmp
-				$Tmp = ""
+				$TmpType = ""
 				Switch ($Audit.type)
 				{
-					0 {$Tmp = "Many"; Break }
-					1 {$Tmp = "AuthGroup"; Break }
-					2 {$Tmp = "Collection"; Break }
-					3 {$Tmp = "Device"; Break }
-					4 {$Tmp = "Disk"; Break }
-					5 {$Tmp = "DeskLocator"; Break }
-					6 {$Tmp = "Farm"; Break }
-					7 {$Tmp = "FarmView"; Break }
-					8 {$Tmp = "Server"; Break }
-					9 {$Tmp = "Site"; Break }
-					10 {$Tmp = "SiteView"; Break }
-					11 {$Tmp = "Store"; Break }
-					12 {$Tmp = "System"; Break }
-					13 {$Tmp = "UserGroup"; Break }
-					Default { {$Tmp = "Undefined"; Break }}
+					0 {$TmpType = "Many"; Break }
+					1 {$TmpType = "AuthGroup"; Break }
+					2 {$TmpType = "Collection"; Break }
+					3 {$TmpType = "Device"; Break }
+					4 {$TmpType = "Disk"; Break }
+					5 {$TmpType = "DeskLocator"; Break }
+					6 {$TmpType = "Farm"; Break }
+					7 {$TmpType = "FarmView"; Break }
+					8 {$TmpType = "Server"; Break }
+					9 {$TmpType = "Site"; Break }
+					10 {$TmpType = "SiteView"; Break }
+					11 {$TmpType = "Store"; Break }
+					12 {$TmpType = "System"; Break }
+					13 {$TmpType = "UserGroup"; Break }
+					Default { {$TmpType = "Undefined"; Break }}
 				}
-				$TmpType = $Tmp
-				$Tmp = $Null
 				If($MSWord -or $PDF)
 				{
 					## Add the required key/values to the hashtable
