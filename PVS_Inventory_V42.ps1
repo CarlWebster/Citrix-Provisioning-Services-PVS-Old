@@ -1,15 +1,16 @@
-#Requires -Version 3.0
+﻿#Requires -Version 3.0
 #This File is in Unicode format.  Do not edit in an ASCII editor.
 
 <#
 .SYNOPSIS
-	Creates a complete inventory of a Citrix PVS 5.x, 6.x or 7.x farm using Microsoft Word 2010 or 2013.
+	Creates a complete inventory of a Citrix PVS 5.x, 6.x or 7.x farm using Microsoft Word 2010, 2013, or 2016.
 .DESCRIPTION
 	Creates a complete inventory of a Citrix PVS 5.x, 6.x or 7.x farm using Microsoft Word and PowerShell.
 	Creates a Word document named after the PVS 5.x, 6.x or 7.x farm.
 	Document includes a Cover Page, Table of Contents and Footer.
 	Version 4 and later include support for the following language versions of Microsoft Word:
 		Catalan
+		Chinese
 		Danish
 		Dutch
 		English
@@ -266,9 +267,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: PVS_Inventory_V42.ps1
-	VERSION: 4.26
+	VERSION: 4.27
 	AUTHOR: Carl Webster, Sr. Solutions Architect at Choice Solutions (with a lot of help from Michael B. Smith, Jeff Wouters and Iain Brighton)
-	LASTEDIT: September 12, 2016
+	LASTEDIT: November 7, 2016
 #>
 
 
@@ -399,14 +400,16 @@ Param(
 #	Added the option to email the output file
 #	Fixed several spacing and typo errors
 #
-#Version 4.26
+#Version 4.26 12-Sep-2016
 #	Added an alias AA for AdminAddress to match the other scripts that use AdminAddress
 #	If remoting is used (-AdminAddress), check if the script is being run elevated. If not,
 #		show the script needs elevation and end the script
 #	Added Break statements to most of the Switch statements
 #	Added checking the NIC's "Allow the computer to turn off this device to save power" setting
 #	Remove all references to TEXT and HTML output as those are in the 5.xx script
-
+#
+#Version 4.27 7-Nov-2016
+#	Added Chinese language support
 
 Set-StrictMode -Version 2
 
@@ -1424,7 +1427,8 @@ Function SetWordHashTable
 	#nl - Dutch
 	#pt - Portuguese
 	#sv - Swedish
-
+	#zh - Chinese
+	
 	[string]$toc = $(
 		Switch ($CultureCode)
 		{
@@ -1439,6 +1443,7 @@ Function SetWordHashTable
 			'nl-'	{ 'Automatische inhoudsopgave 2'; Break }
 			'pt-'	{ 'Sumário Automático 2'; Break }
 			'sv-'	{ 'Automatisk innehållsförteckning2'; Break }
+			'zh-'	{ '自动目录 2'; Break }
 		}
 	)
 
@@ -1459,6 +1464,7 @@ Function GetCulture
 	#codes obtained from http://support.microsoft.com/kb/221435
 	#http://msdn.microsoft.com/en-us/library/bb213877(v=office.12).aspx
 	$CatalanArray = 1027
+	$ChineseArray = 2052,3076,5124,4100
 	$DanishArray = 1030
 	$DutchArray = 2067, 1043
 	$EnglishArray = 3081, 10249, 4105, 9225, 6153, 8201, 5129, 13321, 7177, 11273, 2057, 1033, 12297
@@ -1481,21 +1487,23 @@ Function GetCulture
 	#nl - Dutch
 	#pt - Portuguese
 	#sv - Swedish
+	#zh - Chinese
 
 	Switch ($WordValue)
 	{
-		{$CatalanArray -contains $_} {$CultureCode = "ca-"; Break }
-		{$DanishArray -contains $_} {$CultureCode = "da-"; Break }
-		{$DutchArray -contains $_} {$CultureCode = "nl-"; Break }
-		{$EnglishArray -contains $_} {$CultureCode = "en-"; Break }
-		{$FinnishArray -contains $_} {$CultureCode = "fi-"; Break }
-		{$FrenchArray -contains $_} {$CultureCode = "fr-"; Break }
-		{$GermanArray -contains $_} {$CultureCode = "de-"; Break }
-		{$NorwegianArray -contains $_} {$CultureCode = "nb-"; Break }
-		{$PortugueseArray -contains $_} {$CultureCode = "pt-"; Break }
-		{$SpanishArray -contains $_} {$CultureCode = "es-"; Break }
-		{$SwedishArray -contains $_} {$CultureCode = "sv-"; Break }
-		Default {$CultureCode = "en-"; Break }
+		{$CatalanArray -contains $_} {$CultureCode = "ca-"}
+		{$ChineseArray -contains $_} {$CultureCode = "zh-"}
+		{$DanishArray -contains $_} {$CultureCode = "da-"}
+		{$DutchArray -contains $_} {$CultureCode = "nl-"}
+		{$EnglishArray -contains $_} {$CultureCode = "en-"}
+		{$FinnishArray -contains $_} {$CultureCode = "fi-"}
+		{$FrenchArray -contains $_} {$CultureCode = "fr-"}
+		{$GermanArray -contains $_} {$CultureCode = "de-"}
+		{$NorwegianArray -contains $_} {$CultureCode = "nb-"}
+		{$PortugueseArray -contains $_} {$CultureCode = "pt-"}
+		{$SpanishArray -contains $_} {$CultureCode = "es-"}
+		{$SwedishArray -contains $_} {$CultureCode = "sv-"}
+		Default {$CultureCode = "en-"}
 	}
 	
 	Return $CultureCode
@@ -1730,6 +1738,16 @@ Function ValidateCoverPage
 					"Kontrast", "Kritstreck", "Kuber", "Perspektiv", "Plattor", "Pussel", "Rutnät",
 					"RörElse", "Sidlinje", "Sobert", "Staplat", "Tidningspapper", "Årligt",
 					"Övergående")
+				}
+			}
+
+		'zh-'	{
+				If($xWordVersion -eq $wdWord2010 -or $xWordVersion -eq $wdWord2013 -or $xWordVersion -eq $wdWord2016)
+				{
+					$xArray = ('奥斯汀', '边线型', '花丝', '怀旧', '积分',
+					'离子(浅色)', '离子(深色)', '母版型', '平面', '切片(浅色)',
+					'切片(深色)', '丝状', '网格', '镶边', '信号灯',
+					'运动型')
 				}
 			}
 
@@ -2613,10 +2631,10 @@ Function SetupWord
 	Write-Verbose "$(Get-Date): Setting up Word"
     
 	# Setup word for output
-	Write-Verbose "$(Get-Date): Create Word comObject.  Ignore the next message."
-	$Script:Word = New-Object -comobject "Word.Application" -EA 0
+	Write-Verbose "$(Get-Date): Create Word comObject."
+	$Script:Word = New-Object -comobject "Word.Application" -EA 0 4>$Null
 	
-	If(!$? -or $Script:Word -eq $Null)
+	If(!$? -or $Null -eq $Script:Word)
 	{
 		Write-Warning "The Word object could not be created.  You may need to repair your Word installation."
 		$ErrorActionPreference = $SaveEAPreference
@@ -2673,7 +2691,7 @@ Function SetupWord
 	}
 
 	#only validate CompanyName if the field is blank
-	If([String]::IsNullOrEmpty($CoName))
+	If([String]::IsNullOrEmpty($Script:CoName))
 	{
 		Write-Verbose "$(Get-Date): Company name is blank.  Retrieve company name from registry."
 		$TmpName = ValidateCompanyName
@@ -2784,6 +2802,14 @@ Function SetupWord
 						$CPChanged = $True
 					}
 				}
+
+			'zh-'	{
+					If($CoverPage -eq "Sideline")
+					{
+						$CoverPage = "边线型"
+						$CPChanged = $True
+					}
+				}
 		}
 
 		If($CPChanged)
@@ -2818,7 +2844,7 @@ Function SetupWord
 	[bool]$BuildingBlocksExist = $False
 
 	$Script:Word.Templates.LoadBuildingBlocks()
-	#word 2010/2013
+	#word 2010/2013/2016
 	$BuildingBlocksCollection = $Script:Word.Templates | Where {$_.name -eq "Built-In Building Blocks.dotx"}
 
 	Write-Verbose "$(Get-Date): Attempt to load cover page $($CoverPage)"
@@ -2832,7 +2858,7 @@ Function SetupWord
 		}
 	}        
 
-	If($BuildingBlocks -ne $Null)
+	If($Null -ne $BuildingBlocks)
 	{
 		$BuildingBlocksExist = $True
 
@@ -2846,7 +2872,7 @@ Function SetupWord
 			$part = $Null
 		}
 
-		If($part -ne $Null)
+		If($Null -ne $part)
 		{
 			$Script:CoverPagesExist = $True
 		}
@@ -2861,7 +2887,7 @@ Function SetupWord
 
 	Write-Verbose "$(Get-Date): Create empty word doc"
 	$Script:Doc = $Script:Word.Documents.Add()
-	If($Script:Doc -eq $Null)
+	If($Null -eq $Script:Doc)
 	{
 		Write-Verbose "$(Get-Date): "
 		$ErrorActionPreference = $SaveEAPreference
@@ -2870,7 +2896,7 @@ Function SetupWord
 	}
 
 	$Script:Selection = $Script:Word.Selection
-	If($Script:Selection -eq $Null)
+	If($Null -eq $Script:Selection)
 	{
 		Write-Verbose "$(Get-Date): "
 		$ErrorActionPreference = $SaveEAPreference
@@ -2899,12 +2925,12 @@ Function SetupWord
 		$Script:Selection.InsertNewPage()
 
 		#table of contents
-		Write-Verbose "$(Get-Date): Table of Contents - $($myHash.Word_TableOfContents)"
-		$toc = $BuildingBlocks.BuildingBlockEntries.Item($myHash.Word_TableOfContents)
-		If($toc -eq $Null)
+		Write-Verbose "$(Get-Date): Table of Contents - $($Script:MyHash.Word_TableOfContents)"
+		$toc = $BuildingBlocks.BuildingBlockEntries.Item($Script:MyHash.Word_TableOfContents)
+		If($Null -eq $toc)
 		{
 			Write-Verbose "$(Get-Date): "
-			Write-Verbose "$(Get-Date): Table of Content - $($myHash.Word_TableOfContents) could not be retrieved."
+			Write-Verbose "$(Get-Date): Table of Content - $($Script:MyHash.Word_TableOfContents) could not be retrieved."
 			Write-Warning "This report will not have a Table of Contents."
 		}
 		Else
