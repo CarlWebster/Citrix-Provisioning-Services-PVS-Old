@@ -87,6 +87,12 @@
 .PARAMETER EndDate
 	End date, in MM/DD/YYYY format, for the Audit Trail report.
 	Default is today's date.
+.PARAMETER AddDateTime
+	Adds a date time stamp to the end of the file name.
+	Time stamp is in the format of yyyy-MM-dd_HHmm.
+	June 1, 2014 at 6PM is 2014-06-01_1800.
+	Output filename will be ReportName_2014-06-01_1800.docx (or .pdf).
+	This parameter is disabled by default.
 .EXAMPLE
 	PS C:\PSScript > .\PVS_Inventory_V41.ps1
 	
@@ -193,9 +199,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: PVS_Inventory_V41.ps1
-	VERSION: 4.15
+	VERSION: 4.16
 	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith and Jeff Wouters)
-	LASTEDIT: May 20, 2014
+	LASTEDIT: June 2, 2014
 #>
 
 
@@ -229,13 +235,13 @@ Param([parameter(
 	Position = 3, 
 	Mandatory=$False)
 	] 
-	[Switch]$PDF,
+	[Switch]$PDF=$False,
 
 	[parameter(
 	Position = 4, 
 	Mandatory=$False)
 	] 
-	[Switch]$Hardware,
+	[Switch]$Hardware=$False,
 		
 	[parameter(
 	Position = 5, 
@@ -271,7 +277,13 @@ Param([parameter(
 	Position = 10, 
 	Mandatory=$False)
 	] 
-	[Datetime]$EndDate = (Get-Date -displayhint date)
+	[Datetime]$EndDate = (Get-Date -displayhint date),
+	
+	[parameter(
+	Position = 11, 
+	Mandatory=$False )
+	] 
+	[Switch]$AddDateTime=$False
 
 	)
 
@@ -281,6 +293,19 @@ $PSDefaultParameterValues = @{"*:Verbose"=$True}
 #set $ErrorActionPreference
 $SaveEAPreference = $ErrorActionPreference
 $ErrorActionPreference = 'SilentlyContinue'
+
+If($PDF -eq $Null)
+{
+	$PDF = $False
+}
+If($Hardware -eq $Null)
+{
+	$Hardware = $False
+}
+If($AddDateTime -eq $Null)
+{
+	$AddDateTime = $False
+}
 	
 #Carl Webster, CTP and independent consultant
 #webster@carlwebster.com
@@ -345,6 +370,8 @@ $ErrorActionPreference = 'SilentlyContinue'
 #		Test for existence of "word" variable before removal
 #		Fix GetComputerWMIInfo to work in a multi-forest Active Directory environment
 #	Next script update will require PowerShell Version 3.0 or higher
+#Version 4.16
+#	Added an AddDateTime parameter
 
 Set-StrictMode -Version 2
 
@@ -1739,10 +1766,21 @@ If($Farm -eq $Null)
 
 [string]$FarmName = $farm.FarmName
 [string]$Title="Inventory Report for the $($FarmName) Farm"
-[string]$filename1="$($pwd.path)\$($farm.FarmName).docx"
-If($PDF)
+If($AddDateTime)
 {
-	$filename2="$($pwd.path)\$($farm.FarmName).pdf"
+	[string]$filename1  = "$($pwd.path)\$($farm.FarmName)"
+	If($PDF)
+	{
+		[string]$filename2 = "$($pwd.path)\$($farm.FarmName)"
+	}
+}
+Else
+{
+	[string]$filename1  = "$($pwd.path)\$($farm.FarmName).docx"
+	If($PDF)
+	{
+		[string]$filename2 = "$($pwd.path)\$($farm.FarmName).pdf"
+	}
 }
 
 Write-Verbose "$(Get-Date): Setting up Word"
@@ -1928,6 +1966,7 @@ If($PDF)
 {
 	Write-Verbose "$(Get-Date): Filename2    : $filename2"
 }
+Write-Verbose "$(Get-Date): Add DateTime : $AddDateTime"
 Write-Verbose "$(Get-Date): OS Detected  : $RunningOS"
 Write-Verbose "$(Get-Date): PSUICulture  : $PSUICulture"
 Write-Verbose "$(Get-Date): PSCulture    : $PSCulture"
@@ -4785,7 +4824,16 @@ If($WordVersion -eq $wdWord2007)
 	{
 		Write-Verbose "$(Get-Date): Saving DOCX file"
 	}
-	$RunningOS = (Get-WmiObject -class Win32_OperatingSystem).Caption
+
+	If($AddDateTime)
+	{
+		$FileName1 += "_$(Get-Date -f yyyy-MM-dd_HHmm).docx"
+		If($PDF)
+		{
+			$FileName2 += "_$(Get-Date -f yyyy-MM-dd_HHmm).pdf"
+		}
+	}
+
 	Write-Verbose "$(Get-Date): Running Word 2007 and detected operating system $($RunningOS)"
 	If($RunningOS.Contains("Server 2008 R2") -or $RunningOS.Contains("Server 2012"))
 	{
@@ -4825,6 +4873,16 @@ Else
 	{
 		Write-Verbose "$(Get-Date): Saving DOCX file"
 	}
+
+	If($AddDateTime)
+	{
+		$FileName1 += "_$(Get-Date -f yyyy-MM-dd_HHmm).docx"
+		If($PDF)
+		{
+			$FileName2 += "_$(Get-Date -f yyyy-MM-dd_HHmm).pdf"
+		}
+	}
+
 	$saveFormat = [Enum]::Parse([Microsoft.Office.Interop.Word.WdSaveFormat], "wdFormatDocumentDefault")
 	$doc.SaveAs([REF]$filename1, [ref]$SaveFormat)
 	If($PDF)
