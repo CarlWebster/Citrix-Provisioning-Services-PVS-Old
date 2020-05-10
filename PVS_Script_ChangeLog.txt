@@ -6,6 +6,9 @@
 #Thanks to Michael B. Smith, Joe Shonk and Stephane Thirion
 #for testing and fine-tuning tips 
 
+#Version 4.22 11-Aug-2015
+#	Fixed processing of the Options tab for ServerBootstrap files
+
 #Version 4.21 8-Jul-2015
 #	Add writeCacheType 9 (Cache to Device RAM with overflow to hard disk) for PVS 7.x
 #	Remove writeCacheType 3 and 5 from PVS 6 and 7
