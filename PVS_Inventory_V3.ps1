@@ -127,9 +127,9 @@
 	http://www.carlwebster.com/documenting-a-citrix-provisioning-services-farm-with-microsoft-powershell-and-word-version-2
 .NOTES
 	NAME: PVS_Inventory_V3.ps1
-	VERSION: 3.0
+	VERSION: 3.01
 	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith and Jeff Wouters)
-	LASTEDIT: July 18, 2013
+	LASTEDIT: August 2, 2013
 #>
 
 
@@ -184,7 +184,7 @@ Param([parameter(
 	[string]$Password="")
 
 Set-StrictMode -Version 2
-$ScriptVersion = "3.0"
+$ScriptVersion = "3.01"
 
 #Carl Webster, CTP and independent consultant
 #webster@carlwebster.com
@@ -248,14 +248,20 @@ Function BuildPVSObject
 
 	If($MCLIGetParameters -ne '')
 	{
-		$MCLIGetResult = Mcli-Get "$($MCLIGetWhat)" -p "$($MCLIGetParameters)"
+		$MCLIGetResult = Mcli-Get "$($MCLIGetWhat)" -p "$($MCLIGetParameters)" -EA 0
 	}
 	Else
 	{
-		$MCLIGetResult = Mcli-Get "$($MCLIGetWhat)"
+		$MCLIGetResult = Mcli-Get "$($MCLIGetWhat)" -EA 0
 	}
 
-	If( $error.Count -eq 0 )
+	If( $error.Count -ne 0 -or $MCLIGetResult -eq $Null )
+	{
+		WriteWordLine 0 0 "$($TextForErrorMsg) could not be retrieved"
+		WriteWordLine 0 0 "Error returned is " $error[0].FullyQualifiedErrorId.Split(',')[0].Trim()
+	}
+	Else
+#	If( $error.Count -eq 0 -and $MCLIGetResult -ne $Null )
 	{
 		$PluralObject = @()
 		$SingleObject = $null
@@ -284,11 +290,7 @@ Function BuildPVSObject
 		$PluralObject += $SingleObject
 		Return $PluralObject
 	}
-	Else 
-	{
-		WriteWordLine 0 0 "$($TextForErrorMsg) could not be retrieved"
-		WriteWordLine 0 0 "Error returned is " $error[0].FullyQualifiedErrorId.Split(',')[0].Trim()
-	}
+#	Else 
 }
 
 Function DeviceStatus
@@ -1083,361 +1085,216 @@ ForEach($PVSSite in $PVSSites)
 	$ErrorTxt = "Servers for Site $temp"
 	$servers = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 
-	WriteWordLine 2 0 "Servers"
-	ForEach($Server in $Servers)
+	If( !$? –or $servers –eq $null )
 	{
-		write-verbose "Processing Server $($Server.serverName)"
-		#general tab
-		write-verbose "Processing General Tab"
-		WriteWordLine 3 0 $Server.serverName
-		WriteWordLine 0 0 "Server Properties"
-		WriteWordLine 0 1 "General"
-		WriteWordLine 0 2 "Name`t`t: " $Server.serverName
-		If(![String]::IsNullOrEmpty($Server.description))
-		{
-			WriteWordLine 0 2 "Description`t: " $Server.description
-		}
-		WriteWordLine 0 2 "Power Rating`t: " $Server.powerRating
-		WriteWordLine 0 2 "Log events to the server's Windows Event Log: " -nonewline
-		IF($Server.eventLoggingEnabled -eq "1")
-		{
-			WriteWordLine 0 0 "Yes"
-		}
-		Else
-		{
-			WriteWordLine 0 0 "No"
-		}
-			
-		write-verbose "Processing Network Tab"
-		WriteWordLine 0 1 "Network"
-		If($PVSVersion -eq "7")
-		{
-			WriteWordLine 0 2 "Streaming IP addresses:"
-		}
-		Else
-		{
-			WriteWordLine 0 2 "IP addresses:"
-		}
-		$test = $Server.ip.ToString()
-		$test1 = $test.replace(",","`n`t`t`t")
-		WriteWordLine 0 3 $test1
-		WriteWordLine 0 2 "Ports"
-		WriteWordLine 0 3 "First port`t: " $Server.firstPort
-		WriteWordLine 0 3 "Last port`t: " $Server.lastPort
-		If($PVSVersion -eq "7")
-		{
-			WriteWordLine 0 2 "Management IP`t`t: " $Server.managementIp
-		}
-			
-		write-verbose "Processing Stores Tab"
-		WriteWordLine 0 1 "Stores"
-		#process all stores for this server
-		write-verbose "Processing Stores for server"
-		$temp = $Server.serverName
-		$GetWhat = "serverstore"
-		$GetParam = "servername=$temp"
-		$ErrorTxt = "Store information for server $temp"
-		$stores = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-		WriteWordLine 0 2 "Stores that this server supports:"
-
-		If($Stores -ne $null)
-		{
-			ForEach($store in $stores)
-			{
-				write-verbose "Processing Store $($store.storename)"
-				WriteWordLine 0 3 "Store`t: " $store.storename
-				WriteWordLine 0 3 "Path`t: " -nonewline
-				If($store.path.length -gt 0)
-				{
-					WriteWordLine 0 0 $store.path
-				}
-				Else
-				{
-					WriteWordLine 0 0 "<Using the default path from the store>"
-				}
-				WriteWordLine 0 3 "Write cache paths: " -nonewline
-				If($store.cachePath.length -gt 0)
-				{
-					WriteWordLine 0 0 $store.cachePath
-				}
-				Else
-				{
-					WriteWordLine 0 0 "<Using the default path from the store>"
-				}
-				WriteWordLine 0 0 ""
-			}
-		}
-
-		write-verbose "Processing Options Tab"
-		WriteWordLine 0 1 "Options"
-		If($PVSVersion -eq "5")
-		{
-			WriteWordLine 0 2 "Enable automatic vDisk updates"
-			WriteWordLine 0 3 "Check for new versions of a vDisk`t: " -nonewline
-			If($Server.autoUpdateEnabled -eq "1")
-			{
-				WriteWordLine 0 0 "Yes"
-			}
-			Else
-			{
-				WriteWordLine 0 0 "No"
-			}
-			WriteWordLine 0 3 "Check for incremental updates to a vDisk: " -nonewline
-			If($Server.incrementalUpdateEnabled -eq "1")
-			{
-				WriteWordLine 0 0 "Yes"
-				$AMorPM = "AM"
-				$NumHour = [int]$Server.autoUpdateHour
-				If($NumHour -ge 0 -and $NumHour -lt 12)
-				{
-					$AMorPM = "AM"
-				}
-				Else
-				{
-					$AMorPM = "PM"
-				}
-				If($NumHour -eq 0)
-				{
-					$NumHour += 12
-				}
-				Else
-				{
-					$NumHour -= 12
-				}
-				$StrHour = [string]$NumHour
-				If($StrHour.length -lt 2)
-				{
-					$StrHour = "0" + $StrHour
-				}
-				$tempMinute = ""
-				If($Server.autoUpdateMinute.length -lt 2)
-				{
-					$tempMinute = "0" + $Server.autoUpdateMinute
-				}
-				WriteWordLine 0 3 "Check for updates daily at`t`t: $($StrHour)`:$($tempMinute) $($AMorPM)"
-			}
-			Else
-			{
-				WriteWordLine 0 0 "No"
-			}
-		}
-		WriteWordLine 0 2 "Active directory"
-		If($PVSVersion -eq "5")
-		{
-			WriteWordLine 0 3 "Enable automatic password support: " -nonewline
-			If($Server.adMaxPasswordAgeEnabled -eq "1")
-			{
-				WriteWordLine 0 0 "Yes"
-				WriteWordLine 0 3 "Change computer account password every $($Server.adMaxPasswordAge) days"
-			}
-			Else
-			{
-				WriteWordLine 0 0 "No"
-			}
-		}
-		Else
-		{
-			WriteWordLine 0 3 "Automate computer account password updates`t: " -nonewline
-			If($Server.adMaxPasswordAgeEnabled -eq "1")
-			{
-				WriteWordLine 0 0 "Yes"
-				WriteWordLine 0 3 "Days between password updates`t`t: " $Server.adMaxPasswordAge
-			}
-			Else
-			{
-				WriteWordLine 0 0 "No"
-			}
-		}
-		
-		If($PVSVersion -ne "7")
-		{
-			write-verbose "Processing Logging Tab"
-			WriteWordLine 0 1 "Logging"
-			WriteWordLine 0 2 "Logging level: " -nonewline
-			switch ($Server.logLevel)
-			{
-				0   {WriteWordLine 0 0 "Off"    }
-				1   {WriteWordLine 0 0 "Fatal"  }
-				2   {WriteWordLine 0 0 "Error"  }
-				3   {WriteWordLine 0 0 "Warning"}
-				4   {WriteWordLine 0 0 "Info"   }
-				5   {WriteWordLine 0 0 "Debug"  }
-				6   {WriteWordLine 0 0 "Trace"  }
-				default {WriteWordLine 0 0 "Logging level could not be determined: $($Server.logLevel)"}
-			}
-			WriteWordLine 0 3 "File size maximum`t: $($Server.logFileSizeMax) (MB)"
-			WriteWordLine 0 3 "Backup files maximum`t: " $Server.logFileBackupCopiesMax
-			WriteWordLine 0 0 ""
-		}
-		
-		#advanced button at the bottom
-		write-verbose "Processing Server Tab on Advanced button"
-		WriteWordLine 0 1 "Advanced"
-		WriteWordLine 0 2 "Server"
-		WriteWordLine 0 3 "Threads per port`t`t: " $Server.threadsPerPort
-		WriteWordLine 0 3 "Buffers per thread`t`t: " $Server.buffersPerThread
-		WriteWordLine 0 3 "Server cache timeout`t`t: $($Server.serverCacheTimeout) (seconds)"
-		WriteWordLine 0 3 "Local concurrent I/O limit`t: $($Server.localConcurrentIoLimit) (transactions)"
-		WriteWordLine 0 3 "Remote concurrent I/O limit`t: $($Server.remoteConcurrentIoLimit) (transactions)"
-
-		write-verbose "Processing Network Tab on Advanced button"
-		WriteWordLine 0 2 "Network"
-		WriteWordLine 0 3 "Ethernet MTU`t`t`t: $($Server.maxTransmissionUnits) (bytes)"
-		WriteWordLine 0 3 "I/O burst size`t`t`t: $($Server.ioBurstSize) (KB)"
-		WriteWordLine 0 3 "Enable non-blocking I/O for network communications: " -nonewline
-		If($Server.nonBlockingIoEnabled -eq "1")
-		{
-			WriteWordLine 0 0 "Yes"
-		}
-		Else
-		{
-			WriteWordLine 0 0 "No"
-		}
-
-		write-verbose "Processing Pacing Tab on Advanced button"
-		WriteWordLine 0 2 "Pacing"
-		WriteWordLine 0 3 "Boot pause seconds`t`t: " $Server.bootPauseSeconds
-		$MaxBootTime = SecondsToMinutes $Server.maxBootSeconds
-		If($PVSVersion -eq "7")
-		{
-			WriteWordLine 0 3 "Maximum boot time`t`t: $($MaxBootTime) (minutes:seconds)"
-		}
-		Else
-		{
-			WriteWordLine 0 3 "Maximum boot time`t`t: $($MaxBootTime)"
-		}
-		WriteWordLine 0 3 "Maximum devices booting`t: $($Server.maxBootDevicesAllowed) devices"
-		If($PVSVersion -eq "7")
-		{
-			WriteWordLine 0 3 "vDisk Creation pacing`t`t: $($Server.vDiskCreatePacing) milliseconds"
-		}
-		Else
-		{
-			WriteWordLine 0 3 "vDisk Creation pacing`t`t: " $Server.vDiskCreatePacing
-		}
-
-		write-verbose "Processing Device Tab on Advanced button"
-		WriteWordLine 0 2 "Device"
-		$LicenseTimeout = SecondsToMinutes $Server.licenseTimeout
-		If($PVSVersion -eq "7")
-		{
-			WriteWordLine 0 3 "License timeout`t`t`t: $($LicenseTimeout) (minutes:seconds)"
-		}
-		Else
-		{
-			WriteWordLine 0 3 "License timeout`t`t`t: $($LicenseTimeout)"
-		}
-
-		WriteWordLine 0 0 ""
+		Write-Warning "Failure retrieving PVS Server data"
+		Write-Warning "Report will contain no Server data"
 	}
-
-	#the properties for the servers have been processed. 
-	#now to process the stuff available via a right-click on each server
-
-	#Configure Bootstrap is first
-	write-verbose "Processing Bootstrap files"
-	WriteWordLine 2 0 "Configure Bootstrap settings"
-	ForEach($Server in $Servers)
+	Else
 	{
-		write-verbose "Processing Bootstrap files for Server $($server.servername)"
-		#first get all bootstrap files for the server
-		$temp = $server.serverName
-		$GetWhat = "ServerBootstrapNames"
-		$GetParam = "serverName=$temp"
-		$ErrorTxt = "Server Bootstrap Name information"
-		$BootstrapNames = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-
-		#Now that the list of bootstrap names has been gathered
-		#We have the mandatory parameter to get the bootstrap info
-		#there should be at least one bootstrap filename
-		WriteWordLine 3 0 $Server.serverName
-		If($Bootstrapnames -ne $null)
+		WriteWordLine 2 0 "Servers"
+		ForEach($Server in $Servers)
 		{
-			#cannot use the BuildPVSObject function here
-			$serverbootstraps=@()
-			ForEach($Bootstrapname in $Bootstrapnames)
+			write-verbose "Processing Server $($Server.serverName)"
+			#general tab
+			write-verbose "Processing General Tab"
+			WriteWordLine 3 0 $Server.serverName
+			WriteWordLine 0 0 "Server Properties"
+			WriteWordLine 0 1 "General"
+			WriteWordLine 0 2 "Name`t`t: " $Server.serverName
+			If(![String]::IsNullOrEmpty($Server.description))
 			{
-				#get serverbootstrap info
-				$error.Clear()
-				$tempserverbootstrap = Mcli-Get ServerBootstrap -p name="$($Bootstrapname.name)",servername="$($server.serverName)"
-				If( $error.Count -eq 0 )
-				{
-					$serverbootstrap = $null
-					foreach( $record in $tempserverbootstrap )
-					{
-						If($record.length -gt 5 -and $record.substring(0,6) -eq "Record")
-						{
-							If($serverbootstrap -ne $null)
-							{
-								$serverbootstraps += $serverbootstrap
-							}
-							$serverbootstrap = new-object System.Object
-							#add the bootstrapname name value to the serverbootstrap object
-							$property = "BootstrapName"
-							$value = $Bootstrapname.name
-							Add-Member -inputObject $serverbootstrap -MemberType NoteProperty -Name $property -Value $value
-						}
-						$index = $record.IndexOf( ':' )
-						if( $index -gt 0 )
-						{
-							$property = $record.SubString( 0, $index)
-							$value = $record.SubString( $index + 2 )
-							If($property -ne "Executing")
-							{
-								Add-Member -inputObject $serverbootstrap -MemberType NoteProperty -Name $property -Value $value
-							}
-						}
-					}
-					$serverbootstraps += $serverbootstrap
-				}
-				Else
-				{
-					WriteWordLine 0 0 "Server Bootstrap information could not be retrieved"
-					WriteWordLine 0 0 "Error returned is " $error[0].FullyQualifiedErrorId.Split(',')[0].Trim()
-				}
+				WriteWordLine 0 2 "Description`t: " $Server.description
 			}
-			If($ServerBootstraps -ne $null)
+			WriteWordLine 0 2 "Power Rating`t: " $Server.powerRating
+			WriteWordLine 0 2 "Log events to the server's Windows Event Log: " -nonewline
+			IF($Server.eventLoggingEnabled -eq "1")
 			{
-				write-verbose "Processing General Tab"
-				WriteWordLine 0 1 "General"	
-				ForEach($ServerBootstrap in $ServerBootstraps)
+				WriteWordLine 0 0 "Yes"
+			}
+			Else
+			{
+				WriteWordLine 0 0 "No"
+			}
+				
+			write-verbose "Processing Network Tab"
+			WriteWordLine 0 1 "Network"
+			If($PVSVersion -eq "7")
+			{
+				WriteWordLine 0 2 "Streaming IP addresses:"
+			}
+			Else
+			{
+				WriteWordLine 0 2 "IP addresses:"
+			}
+			$test = $Server.ip.ToString()
+			$test1 = $test.replace(",","`n`t`t`t")
+			WriteWordLine 0 3 $test1
+			WriteWordLine 0 2 "Ports"
+			WriteWordLine 0 3 "First port`t: " $Server.firstPort
+			WriteWordLine 0 3 "Last port`t: " $Server.lastPort
+			If($PVSVersion -eq "7")
+			{
+				WriteWordLine 0 2 "Management IP`t`t: " $Server.managementIp
+			}
+				
+			write-verbose "Processing Stores Tab"
+			WriteWordLine 0 1 "Stores"
+			#process all stores for this server
+			write-verbose "Processing Stores for server"
+			$temp = $Server.serverName
+			$GetWhat = "serverstore"
+			$GetParam = "servername=$temp"
+			$ErrorTxt = "Store information for server $temp"
+			$stores = BuildPVSObject $GetWhat $GetParam $ErrorTxt
+			WriteWordLine 0 2 "Stores that this server supports:"
+
+			If($Stores -ne $null)
+			{
+				ForEach($store in $stores)
 				{
-					WriteWordLine 0 2 "Bootstrap file`t: " $ServerBootstrap.Bootstrapname
-					If($ServerBootstrap.bootserver1_Ip -ne "0.0.0.0")
+					write-verbose "Processing Store $($store.storename)"
+					WriteWordLine 0 3 "Store`t: " $store.storename
+					WriteWordLine 0 3 "Path`t: " -nonewline
+					If($store.path.length -gt 0)
 					{
-						WriteWordLine 0 2 "IP Address`t: " $ServerBootstrap.bootserver1_Ip
-						WriteWordLine 0 2 "Subnet Mask`t: " $ServerBootstrap.bootserver1_Netmask
-						WriteWordLine 0 2 "Gateway`t: " $ServerBootstrap.bootserver1_Gateway
-						WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver1_Port
+						WriteWordLine 0 0 $store.path
 					}
-					If($ServerBootstrap.bootserver2_Ip -ne "0.0.0.0")
+					Else
 					{
-						WriteWordLine 0 2 "IP Address`t: " $ServerBootstrap.bootserver2_Ip
-						WriteWordLine 0 2 "Subnet Mask`t: " $ServerBootstrap.bootserver2_Netmask
-						WriteWordLine 0 2 "Gateway`t: " $ServerBootstrap.bootserver2_Gateway
-						WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver2_Port
+						WriteWordLine 0 0 "<Using the default path from the store>"
 					}
-					If($ServerBootstrap.bootserver3_Ip -ne "0.0.0.0")
+					WriteWordLine 0 3 "Write cache paths: " -nonewline
+					If($store.cachePath.length -gt 0)
 					{
-						WriteWordLine 0 2 "IP Address`t: " $ServerBootstrap.bootserver3_Ip
-						WriteWordLine 0 2 "Subnet Mask`t: " $ServerBootstrap.bootserver3_Netmask
-						WriteWordLine 0 2 "Gateway`t: " $ServerBootstrap.bootserver3_Gateway
-						WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver3_Port
+						WriteWordLine 0 0 $store.cachePath
 					}
-					If($ServerBootstrap.bootserver4_Ip -ne "0.0.0.0")
+					Else
 					{
-						WriteWordLine 0 2 "IP Address`t: " $ServerBootstrap.bootserver4_Ip
-						WriteWordLine 0 2 "Subnet Mask`t: " $ServerBootstrap.bootserver4_Netmask
-						WriteWordLine 0 2 "Gateway`t: " $ServerBootstrap.bootserver4_Gateway
-						WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver4_Port
+						WriteWordLine 0 0 "<Using the default path from the store>"
 					}
 					WriteWordLine 0 0 ""
 				}
 			}
+
 			write-verbose "Processing Options Tab"
 			WriteWordLine 0 1 "Options"
-			WriteWordLine 0 2 "Verbose mode`t`t`t: " -nonewline
-			If($ServerBootstrap.verboseMode -eq "1")
+			If($PVSVersion -eq "5")
+			{
+				WriteWordLine 0 2 "Enable automatic vDisk updates"
+				WriteWordLine 0 3 "Check for new versions of a vDisk`t: " -nonewline
+				If($Server.autoUpdateEnabled -eq "1")
+				{
+					WriteWordLine 0 0 "Yes"
+				}
+				Else
+				{
+					WriteWordLine 0 0 "No"
+				}
+				WriteWordLine 0 3 "Check for incremental updates to a vDisk: " -nonewline
+				If($Server.incrementalUpdateEnabled -eq "1")
+				{
+					WriteWordLine 0 0 "Yes"
+					$AMorPM = "AM"
+					$NumHour = [int]$Server.autoUpdateHour
+					If($NumHour -ge 0 -and $NumHour -lt 12)
+					{
+						$AMorPM = "AM"
+					}
+					Else
+					{
+						$AMorPM = "PM"
+					}
+					If($NumHour -eq 0)
+					{
+						$NumHour += 12
+					}
+					Else
+					{
+						$NumHour -= 12
+					}
+					$StrHour = [string]$NumHour
+					If($StrHour.length -lt 2)
+					{
+						$StrHour = "0" + $StrHour
+					}
+					$tempMinute = ""
+					If($Server.autoUpdateMinute.length -lt 2)
+					{
+						$tempMinute = "0" + $Server.autoUpdateMinute
+					}
+					WriteWordLine 0 3 "Check for updates daily at`t`t: $($StrHour)`:$($tempMinute) $($AMorPM)"
+				}
+				Else
+				{
+					WriteWordLine 0 0 "No"
+				}
+			}
+			WriteWordLine 0 2 "Active directory"
+			If($PVSVersion -eq "5")
+			{
+				WriteWordLine 0 3 "Enable automatic password support: " -nonewline
+				If($Server.adMaxPasswordAgeEnabled -eq "1")
+				{
+					WriteWordLine 0 0 "Yes"
+					WriteWordLine 0 3 "Change computer account password every $($Server.adMaxPasswordAge) days"
+				}
+				Else
+				{
+					WriteWordLine 0 0 "No"
+				}
+			}
+			Else
+			{
+				WriteWordLine 0 3 "Automate computer account password updates`t: " -nonewline
+				If($Server.adMaxPasswordAgeEnabled -eq "1")
+				{
+					WriteWordLine 0 0 "Yes"
+					WriteWordLine 0 3 "Days between password updates`t`t: " $Server.adMaxPasswordAge
+				}
+				Else
+				{
+					WriteWordLine 0 0 "No"
+				}
+			}
+			
+			If($PVSVersion -ne "7")
+			{
+				write-verbose "Processing Logging Tab"
+				WriteWordLine 0 1 "Logging"
+				WriteWordLine 0 2 "Logging level: " -nonewline
+				switch ($Server.logLevel)
+				{
+					0   {WriteWordLine 0 0 "Off"    }
+					1   {WriteWordLine 0 0 "Fatal"  }
+					2   {WriteWordLine 0 0 "Error"  }
+					3   {WriteWordLine 0 0 "Warning"}
+					4   {WriteWordLine 0 0 "Info"   }
+					5   {WriteWordLine 0 0 "Debug"  }
+					6   {WriteWordLine 0 0 "Trace"  }
+					default {WriteWordLine 0 0 "Logging level could not be determined: $($Server.logLevel)"}
+				}
+				WriteWordLine 0 3 "File size maximum`t: $($Server.logFileSizeMax) (MB)"
+				WriteWordLine 0 3 "Backup files maximum`t: " $Server.logFileBackupCopiesMax
+				WriteWordLine 0 0 ""
+			}
+			
+			#advanced button at the bottom
+			write-verbose "Processing Server Tab on Advanced button"
+			WriteWordLine 0 1 "Advanced"
+			WriteWordLine 0 2 "Server"
+			WriteWordLine 0 3 "Threads per port`t`t: " $Server.threadsPerPort
+			WriteWordLine 0 3 "Buffers per thread`t`t: " $Server.buffersPerThread
+			WriteWordLine 0 3 "Server cache timeout`t`t: $($Server.serverCacheTimeout) (seconds)"
+			WriteWordLine 0 3 "Local concurrent I/O limit`t: $($Server.localConcurrentIoLimit) (transactions)"
+			WriteWordLine 0 3 "Remote concurrent I/O limit`t: $($Server.remoteConcurrentIoLimit) (transactions)"
+
+			write-verbose "Processing Network Tab on Advanced button"
+			WriteWordLine 0 2 "Network"
+			WriteWordLine 0 3 "Ethernet MTU`t`t`t: $($Server.maxTransmissionUnits) (bytes)"
+			WriteWordLine 0 3 "I/O burst size`t`t`t: $($Server.ioBurstSize) (KB)"
+			WriteWordLine 0 3 "Enable non-blocking I/O for network communications: " -nonewline
+			If($Server.nonBlockingIoEnabled -eq "1")
 			{
 				WriteWordLine 0 0 "Yes"
 			}
@@ -1445,58 +1302,211 @@ ForEach($PVSSite in $PVSSites)
 			{
 				WriteWordLine 0 0 "No"
 			}
-			WriteWordLine 0 2 "Interrupt safe mode`t`t: " -nonewline
-			If($ServerBootstrap.interruptSafeMode -eq "1")
+
+			write-verbose "Processing Pacing Tab on Advanced button"
+			WriteWordLine 0 2 "Pacing"
+			WriteWordLine 0 3 "Boot pause seconds`t`t: " $Server.bootPauseSeconds
+			$MaxBootTime = SecondsToMinutes $Server.maxBootSeconds
+			If($PVSVersion -eq "7")
 			{
-				WriteWordLine 0 0 "Yes"
+				WriteWordLine 0 3 "Maximum boot time`t`t: $($MaxBootTime) (minutes:seconds)"
 			}
 			Else
 			{
-				WriteWordLine 0 0 "No"
+				WriteWordLine 0 3 "Maximum boot time`t`t: $($MaxBootTime)"
 			}
-			WriteWordLine 0 2 "Advanced Memory Support`t: " -nonewline
-			If($ServerBootstrap.paeMode -eq "1")
+			WriteWordLine 0 3 "Maximum devices booting`t: $($Server.maxBootDevicesAllowed) devices"
+			If($PVSVersion -eq "7")
 			{
-				WriteWordLine 0 0 "Yes"
+				WriteWordLine 0 3 "vDisk Creation pacing`t`t: $($Server.vDiskCreatePacing) milliseconds"
 			}
 			Else
 			{
-				WriteWordLine 0 0 "No"
+				WriteWordLine 0 3 "vDisk Creation pacing`t`t: " $Server.vDiskCreatePacing
 			}
-			WriteWordLine 0 2 "Network recovery method`t: " -nonewline
-			If($ServerBootstrap.bootFromHdOnFail -eq "0")
+
+			write-verbose "Processing Device Tab on Advanced button"
+			WriteWordLine 0 2 "Device"
+			$LicenseTimeout = SecondsToMinutes $Server.licenseTimeout
+			If($PVSVersion -eq "7")
 			{
-				WriteWordLine 0 0 "Restore network connection"
+				WriteWordLine 0 3 "License timeout`t`t`t: $($LicenseTimeout) (minutes:seconds)"
 			}
 			Else
 			{
-				WriteWordLine 0 0 "Reboot to Hard Drive after $($ServerBootstrap.recoveryTime) seconds"
+				WriteWordLine 0 3 "License timeout`t`t`t: $($LicenseTimeout)"
 			}
-			WriteWordLine 0 2 "Timeouts"
-			WriteWordLine 0 3 "Login polling timeout`t: " -nonewline
-			If($ServerBootstrap.pollingTimeout -eq "")
-			{
-				WriteWordLine 0 0 "5000 (milliseconds)"
-			}
-			Else
-			{
-				WriteWordLine 0 0 "$($ServerBootstrap.pollingTimeout) (milliseconds)"
-			}
-			WriteWordLine 0 3 "Login general timeout`t: " -nonewline
-			If($ServerBootstrap.generalTimeout -eq "")
-			{
-				WriteWordLine 0 0 "5000 (milliseconds)"
-			}
-			Else
-			{
-				WriteWordLine 0 0 "$($ServerBootstrap.generalTimeout) (milliseconds)"
-			}
+
+			WriteWordLine 0 0 ""
 		}
-		Else
+
+		#the properties for the servers have been processed. 
+		#now to process the stuff available via a right-click on each server
+
+		#Configure Bootstrap is first
+		write-verbose "Processing Bootstrap files"
+		WriteWordLine 2 0 "Configure Bootstrap settings"
+		ForEach($Server in $Servers)
 		{
-			WriteWordLine 0 2 "No Bootstrap names available"
-		}
-	}		
+			write-verbose "Processing Bootstrap files for Server $($server.servername)"
+			#first get all bootstrap files for the server
+			$temp = $server.serverName
+			$GetWhat = "ServerBootstrapNames"
+			$GetParam = "serverName=$temp"
+			$ErrorTxt = "Server Bootstrap Name information"
+			$BootstrapNames = BuildPVSObject $GetWhat $GetParam $ErrorTxt
+
+			#Now that the list of bootstrap names has been gathered
+			#We have the mandatory parameter to get the bootstrap info
+			#there should be at least one bootstrap filename
+			WriteWordLine 3 0 $Server.serverName
+			If($Bootstrapnames -ne $null)
+			{
+				#cannot use the BuildPVSObject function here
+				$serverbootstraps=@()
+				ForEach($Bootstrapname in $Bootstrapnames)
+				{
+					#get serverbootstrap info
+					$error.Clear()
+					$tempserverbootstrap = Mcli-Get ServerBootstrap -p name="$($Bootstrapname.name)",servername="$($server.serverName)" -EA 0
+					If( $error.Count -eq 0 )
+					{
+						$serverbootstrap = $null
+						foreach( $record in $tempserverbootstrap )
+						{
+							If($record.length -gt 5 -and $record.substring(0,6) -eq "Record")
+							{
+								If($serverbootstrap -ne $null)
+								{
+									$serverbootstraps += $serverbootstrap
+								}
+								$serverbootstrap = new-object System.Object
+								#add the bootstrapname name value to the serverbootstrap object
+								$property = "BootstrapName"
+								$value = $Bootstrapname.name
+								Add-Member -inputObject $serverbootstrap -MemberType NoteProperty -Name $property -Value $value
+							}
+							$index = $record.IndexOf( ':' )
+							if( $index -gt 0 )
+							{
+								$property = $record.SubString( 0, $index)
+								$value = $record.SubString( $index + 2 )
+								If($property -ne "Executing")
+								{
+									Add-Member -inputObject $serverbootstrap -MemberType NoteProperty -Name $property -Value $value
+								}
+							}
+						}
+						$serverbootstraps += $serverbootstrap
+					}
+					Else
+					{
+						WriteWordLine 0 0 "Server Bootstrap information could not be retrieved"
+						WriteWordLine 0 0 "Error returned is " $error[0].FullyQualifiedErrorId.Split(',')[0].Trim()
+					}
+				}
+				If($ServerBootstraps -ne $null)
+				{
+					write-verbose "Processing General Tab"
+					WriteWordLine 0 1 "General"	
+					ForEach($ServerBootstrap in $ServerBootstraps)
+					{
+						WriteWordLine 0 2 "Bootstrap file`t: " $ServerBootstrap.Bootstrapname
+						If($ServerBootstrap.bootserver1_Ip -ne "0.0.0.0")
+						{
+							WriteWordLine 0 2 "IP Address`t: " $ServerBootstrap.bootserver1_Ip
+							WriteWordLine 0 2 "Subnet Mask`t: " $ServerBootstrap.bootserver1_Netmask
+							WriteWordLine 0 2 "Gateway`t: " $ServerBootstrap.bootserver1_Gateway
+							WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver1_Port
+						}
+						If($ServerBootstrap.bootserver2_Ip -ne "0.0.0.0")
+						{
+							WriteWordLine 0 2 "IP Address`t: " $ServerBootstrap.bootserver2_Ip
+							WriteWordLine 0 2 "Subnet Mask`t: " $ServerBootstrap.bootserver2_Netmask
+							WriteWordLine 0 2 "Gateway`t: " $ServerBootstrap.bootserver2_Gateway
+							WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver2_Port
+						}
+						If($ServerBootstrap.bootserver3_Ip -ne "0.0.0.0")
+						{
+							WriteWordLine 0 2 "IP Address`t: " $ServerBootstrap.bootserver3_Ip
+							WriteWordLine 0 2 "Subnet Mask`t: " $ServerBootstrap.bootserver3_Netmask
+							WriteWordLine 0 2 "Gateway`t: " $ServerBootstrap.bootserver3_Gateway
+							WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver3_Port
+						}
+						If($ServerBootstrap.bootserver4_Ip -ne "0.0.0.0")
+						{
+							WriteWordLine 0 2 "IP Address`t: " $ServerBootstrap.bootserver4_Ip
+							WriteWordLine 0 2 "Subnet Mask`t: " $ServerBootstrap.bootserver4_Netmask
+							WriteWordLine 0 2 "Gateway`t: " $ServerBootstrap.bootserver4_Gateway
+							WriteWordLine 0 2 "Port`t`t: " $ServerBootstrap.bootserver4_Port
+						}
+						WriteWordLine 0 0 ""
+					}
+				}
+				write-verbose "Processing Options Tab"
+				WriteWordLine 0 1 "Options"
+				WriteWordLine 0 2 "Verbose mode`t`t`t: " -nonewline
+				If($ServerBootstrap.verboseMode -eq "1")
+				{
+					WriteWordLine 0 0 "Yes"
+				}
+				Else
+				{
+					WriteWordLine 0 0 "No"
+				}
+				WriteWordLine 0 2 "Interrupt safe mode`t`t: " -nonewline
+				If($ServerBootstrap.interruptSafeMode -eq "1")
+				{
+					WriteWordLine 0 0 "Yes"
+				}
+				Else
+				{
+					WriteWordLine 0 0 "No"
+				}
+				WriteWordLine 0 2 "Advanced Memory Support`t: " -nonewline
+				If($ServerBootstrap.paeMode -eq "1")
+				{
+					WriteWordLine 0 0 "Yes"
+				}
+				Else
+				{
+					WriteWordLine 0 0 "No"
+				}
+				WriteWordLine 0 2 "Network recovery method`t: " -nonewline
+				If($ServerBootstrap.bootFromHdOnFail -eq "0")
+				{
+					WriteWordLine 0 0 "Restore network connection"
+				}
+				Else
+				{
+					WriteWordLine 0 0 "Reboot to Hard Drive after $($ServerBootstrap.recoveryTime) seconds"
+				}
+				WriteWordLine 0 2 "Timeouts"
+				WriteWordLine 0 3 "Login polling timeout`t: " -nonewline
+				If($ServerBootstrap.pollingTimeout -eq "")
+				{
+					WriteWordLine 0 0 "5000 (milliseconds)"
+				}
+				Else
+				{
+					WriteWordLine 0 0 "$($ServerBootstrap.pollingTimeout) (milliseconds)"
+				}
+				WriteWordLine 0 3 "Login general timeout`t: " -nonewline
+				If($ServerBootstrap.generalTimeout -eq "")
+				{
+					WriteWordLine 0 0 "5000 (milliseconds)"
+				}
+				Else
+				{
+					WriteWordLine 0 0 "$($ServerBootstrap.generalTimeout) (milliseconds)"
+				}
+			}
+			Else
+			{
+				WriteWordLine 0 2 "No Bootstrap names available"
+			}
+		}		
+	}
 
 	#process all vDisks in site
 	write-verbose "Processing all vDisks in site"
@@ -2773,10 +2783,13 @@ If($Stores -ne $null)
 				$GetParam = "serverName=$Temp"
 				$ErrorTxt = "Server Store information"
 				$ServerStore = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-				If($ServerStore -ne $null -and $ServerStore.storeName -eq $Store.StoreName)
+				If($ServerStore -ne $null)
 				{
-					$StoreSite = $Server.siteName
-					$StoreServers += $Server.serverName
+					If($ServerStore.storeName -eq $Store.StoreName)
+					{
+						$StoreSite = $Server.siteName
+						$StoreServers += $Server.serverName
+					}
 				}
 			}	
 		}
