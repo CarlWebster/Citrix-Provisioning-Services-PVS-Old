@@ -267,9 +267,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: PVS_Inventory_V42.ps1
-	VERSION: 4.27
+	VERSION: 4.28
 	AUTHOR: Carl Webster, Sr. Solutions Architect at Choice Solutions (with a lot of help from Michael B. Smith, Jeff Wouters and Iain Brighton)
-	LASTEDIT: November 7, 2016
+	LASTEDIT: February 13, 2017
 #>
 
 
@@ -410,6 +410,10 @@ Param(
 #
 #Version 4.27 7-Nov-2016
 #	Added Chinese language support
+#
+#Version 4.28 13-Feb-2017
+#	Fixed French wording for Table of Contents 2 (Thanks to David Rouquier)
+
 
 Set-StrictMode -Version 2
 
@@ -1438,7 +1442,7 @@ Function SetWordHashTable
 			'en-'	{ 'Automatic Table 2'; Break }
 			'es-'	{ 'Tabla automática 2'; Break }
 			'fi-'	{ 'Automaattinen taulukko 2'; Break }
-			'fr-'	{ 'Sommaire Automatique 2'; Break }
+			'fr-'	{ 'Table automatique 2'; Break } #changed 13-feb-2017 david roquier and samuel legrand
 			'nb-'	{ 'Automatisk tabell 2'; Break }
 			'nl-'	{ 'Automatische inhoudsopgave 2'; Break }
 			'pt-'	{ 'Sumário Automático 2'; Break }
