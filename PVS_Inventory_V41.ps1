@@ -193,9 +193,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: PVS_Inventory_V41.ps1
-	VERSION: 4.12
+	VERSION: 4.13
 	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith and Jeff Wouters)
-	LASTEDIT: February 2, 2014
+	LASTEDIT: February 3, 2014
 #>
 
 
@@ -327,6 +327,9 @@ $PSDefaultParameterValues = @{"*:Verbose"=$True}
 #	Added vDisk Versions
 #	Added Audit Trail report as a table to the Site section
 #	Added StartDate and EndDate parameters to support the Audit Trail
+#Version 4.13
+#	From the vDisk Versions dialog, added the "Boot production devices from version"
+#	Added "Current booting version" after the version # for the vDisk Version used for booting
 
 
 Set-StrictMode -Version 2
@@ -3062,6 +3065,7 @@ ForEach($PVSSite in $PVSSites)
 				
 				#process Versions menu
 				#get versions info
+				#thanks to the PVS Product team for their help in understanding the Versions information
 				Write-Verbose "$(Get-Date): `t`t`tProcessing vDisk Versions"
 				$VersionsObjects = @()
 				$error.Clear()
@@ -3102,25 +3106,25 @@ ForEach($PVSSite in $PVSSites)
 						#get the current booting version
 						#by default, the $DiskVersions object is in version number order lowest to highest
 						#the initial or base version is 0 and always exists
-						[int]$BootingVersion = 0
+						[string]$BootingVersion = "0"
 						[bool]$BootOverride = $False
 						ForEach($DiskVersion in $DiskVersions)
 						{
-							If($DiskVersion.access -eq 3)
+							If($DiskVersion.access -eq "3")
 							{
 								#override i.e. manually selected boot version
 								$BootingVersion = $DiskVersion.version
 								$BootOverride = $True
-								Exit
+								Break
 							}
-							ElseIf($DiskVersion.access -eq 0 -and !$DiskVersion.IsPending )
+							ElseIf($DiskVersion.access -eq "0" -and $DiskVersion.IsPending -eq "0" )
 							{
 								$BootingVersion = $DiskVersion.version
 								$BootOverride = $False
 							}
 						}
 						
-						WriteWordLine 0 2 "Boot production devices from version: " -NoNewLine
+						WriteWordLine 0 2 "Boot production devices from version`t: " -NoNewLine
 						If($BootOverride)
 						{
 							WriteWordLine 0 0 $BootingVersion
@@ -3134,11 +3138,15 @@ ForEach($PVSSite in $PVSSites)
 						ForEach($DiskVersion in $DiskVersions)
 						{
 							Write-Verbose "$(Get-Date): `t`t`t`tProcessing vDisk Version $($DiskVersion.version)"
+							WriteWordLine 0 2 "Version`t`t`t`t`t: " -NoNewLine
 							If($DiskVersion.version -eq $BootingVersion)
 							{
-								WriteWordLine 0 2 "Current booting version"
+								WriteWordLine 0 0 "$($DiskVersion.version) (Current booting version)"
 							}
-							WriteWordLine 0 2 "Version`t`t`t`t`t: " $DiskVersion.version
+							Else
+							{
+								WriteWordLine 0 0 $DiskVersion.version
+							}
 							WriteWordLine 0 2 "Created`t`t`t`t`t: " $DiskVersion.createDate
 							If(![String]::IsNullOrEmpty($DiskVersion.scheduledDate))
 							{
@@ -3148,24 +3156,24 @@ ForEach($PVSSite in $PVSSites)
 							WriteWordLine 0 2 "Access`t`t`t`t`t: " -NoNewLine
 							Switch ($DiskVersion.access)
 							{
-								0 {WriteWordLine 0 0 "Production"}
-								1 {WriteWordLine 0 0 "Maintenance"}
-								2 {WriteWordLine 0 0 "Maintenance Highest Version"}
-								3 {WriteWordLine 0 0 "Override"}
-								4 {WriteWordLine 0 0 "Merge"}
-								5 {WriteWordLine 0 0 "Merge Maintenance"}
-								6 {WriteWordLine 0 0 "Merge Test"}
-								7 {WriteWordLine 0 0 "Test"}
+								"0" {WriteWordLine 0 0 "Production"}
+								"1" {WriteWordLine 0 0 "Maintenance"}
+								"2" {WriteWordLine 0 0 "Maintenance Highest Version"}
+								"3" {WriteWordLine 0 0 "Override"}
+								"4" {WriteWordLine 0 0 "Merge"}
+								"5" {WriteWordLine 0 0 "Merge Maintenance"}
+								"6" {WriteWordLine 0 0 "Merge Test"}
+								"7" {WriteWordLine 0 0 "Test"}
 								Default {WriteWordLine 0 0 "Access could not be determined: $($DiskVersion.access)"}
 							}
 							WriteWordLine 0 2 "Type`t`t`t`t`t: " -NoNewLine
 							Switch ($DiskVersion.type)
 							{
-								0 {WriteWordLine 0 0 "Base"}
-								1 {WriteWordLine 0 0 "Manual"}
-								2 {WriteWordLine 0 0 "Automatic"}
-								3 {WriteWordLine 0 0 "Merge"}
-								4 {WriteWordLine 0 0 "Merge Base"}
+								"0" {WriteWordLine 0 0 "Base"}
+								"1" {WriteWordLine 0 0 "Manual"}
+								"2" {WriteWordLine 0 0 "Automatic"}
+								"3" {WriteWordLine 0 0 "Merge"}
+								"4" {WriteWordLine 0 0 "Merge Base"}
 								Default {WriteWordLine 0 0 "Type could not be determined: $($DiskVersion.type)"}
 							}
 							If(![String]::IsNullOrEmpty($DiskVersion.description))
@@ -4098,7 +4106,7 @@ ForEach($PVSSite in $PVSSites)
 			{
 				$xRow++
 				$Cnt++
-				Write-Verbose "$(Get-Date): `t`t`tAdding row for audit trail item # $Cnt"
+				Write-Verbose "$(Get-Date): `t`t`t`t`tAdding row for audit trail item # $Cnt"
 				If($xRow % 2 -eq 0)
 				{
 					$Table.Cell($xRow,1).Shading.BackgroundPatternColor = $wdColorGray05
