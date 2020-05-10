@@ -100,9 +100,9 @@
 	http://www.carlwebster.com/documenting-a-citrix-provisioning-services-farm-with-microsoft-powershell-and-word-version-2
 .NOTES
 	NAME: PVS_Inventory_V2.ps1
-	VERSION: 2.01
+	VERSION: 2.02
 	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith and Jeff Wouters)
-	LASTEDIT: April 21, 2013
+	LASTEDIT: June 7, 2013
 #>
 
 
@@ -163,6 +163,9 @@ Set-StrictMode -Version 2
 #Updated April 19, 2013
 #	Fixed the content of and the detail contained in the Table of Contents
 #	Fixed a compatibility issue with the way the Word file was saved and Set-StrictMode -Version 2
+#Updated June 7, 2013
+#	Added for PVS 6.x processing the vDisk Load Balancing menu
+
 
 Function CheckWordPrereq
 {
@@ -1755,6 +1758,36 @@ ForEach($PVSSite in $PVSSites)
 				WriteWordLine 0 3 "Minor #: " $Disk.minorRelease
 				WriteWordLine 0 3 "Build #`t: " $Disk.build
 				WriteWordLine 0 3 "Serial #`t: " $Disk.serialNumber
+				
+				#process vDisk Load Balancing Menu
+				write-verbose "Processing vDisk Load Balancing Menu"
+				WriteWordLine 3 1 "vDisk Load Balancing"
+				If(![String]::IsNullOrEmpty($Disk.serverName))
+				{
+					WriteWordLine 0 2 "Use this server to provide the vDisk: " $Disk.serverName
+				}
+				Else
+				{
+					WriteWordLine 0 2 "Subnet Affinity`t`t: " -nonewline
+					switch ($Disk.subnetAffinity)
+					{
+						0 {WriteWordLine 0 0 "None"}
+						1 {WriteWordLine 0 0 "Best Effort"}
+						2 {WriteWordLine 0 0 "Fixed"}
+						Default {WriteWordLine 0 0 "Subnet Affinity could not be determined: $($Disk.subnetAffinity)"}
+					}
+					WriteWordLine 0 1 "Rebalance Enabled`t: " -nonewline
+					If($Disk.rebalanceEnabled -eq "1")
+					{
+						WriteWordLine 0 0 "Yes"
+						WriteWordLine 0 2 "Trigger Percent`t`t: $($Disk.rebalanceTriggerPercent)"
+					}
+					Else
+					{
+						WriteWordLine 0 0 "No"
+					}
+				}
+				
 			}#end of PVS 6.x
 		}
 	}
@@ -1880,7 +1913,7 @@ ForEach($PVSSite in $PVSSites)
 				}
 			}
 			
-			If($Taskss -ne $null)
+			If($Tasks -ne $null)
 			{
 				ForEach($Task in $Tasks)
 				{
