@@ -87,22 +87,17 @@
 	The PDF file is roughly 5X to 10X larger than the DOCX file.
 	This parameter requires Microsoft Word to be installed.
 	This parameter uses the Word SaveAs PDF capability.
-.PARAMETER Text
-	Creates a formatted text file with a .txt extension.
-	This parameter is disabled by default.
-	This parameter is reserved for a future update and no useable output is created at this time.
 .PARAMETER MSWord
 	SaveAs DOCX file
 	This parameter is set True if no other output format is selected.
-.PARAMETER HTML
-	Creates an HTML file with an .html extension.
-	This parameter is disabled by default.
-	This parameter is reserved for a future update and no output is created at this time.
 .PARAMETER Hardware
 	Use WMI to gather hardware information on: Computer System, Disks, Processor and Network Interface Cards
 	This parameter is disabled by default.
 .PARAMETER AdminAddress
 	Specifies the name of a PVS server that the PowerShell script will connect to. 
+	Using this parameter requires the script be run from an elevated PowerShell session.
+	Starting with V4.26 of the script, this requirement is now checked.
+	This parameter has an alias of AA.
 .PARAMETER User
 	Specifies the user used for the AdminAddress connection. 
 .PARAMETER Domain
@@ -156,34 +151,6 @@
 	HKEY_CURRENT_USER\Software\Microsoft\Office\Common\UserInfo\Company="Carl Webster"
 	$env:username = Administrator
 	AdminAddress = LocalHost
-
-	Carl Webster for the Company Name.
-	Sideline for the Cover Page format.
-	Administrator for the User Name.
-	LocalHost for AdminAddress.
-.EXAMPLE
-	PS C:\PSScript > .\PVS_Inventory_V42.ps1 -TEXT
-
-	This parameter is reserved for a future update and no output is created at this time.
-	
-	Will use all default values and save the document as a formatted text file.
-	HKEY_CURRENT_USER\Software\Microsoft\Office\Common\UserInfo\CompanyName="Carl Webster" or
-	HKEY_CURRENT_USER\Software\Microsoft\Office\Common\UserInfo\Company="Carl Webster"
-	$env:username = Administrator
-
-	Carl Webster for the Company Name.
-	Sideline for the Cover Page format.
-	Administrator for the User Name.
-	LocalHost for AdminAddress.
-.EXAMPLE
-	PS C:\PSScript > .\PVS_Inventory_V42.ps1 -HTML
-
-	This parameter is reserved for a future update and no output is created at this time.
-	
-	Will use all default values and save the document as an HTML file.
-	HKEY_CURRENT_USER\Software\Microsoft\Office\Common\UserInfo\CompanyName="Carl Webster" or
-	HKEY_CURRENT_USER\Software\Microsoft\Office\Common\UserInfo\Company="Carl Webster"
-	$env:username = Administrator
 
 	Carl Webster for the Company Name.
 	Sideline for the Cover Page format.
@@ -299,9 +266,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: PVS_Inventory_V42.ps1
-	VERSION: 4.25
-	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith, Jeff Wouters and Iain Brighton)
-	LASTEDIT: February 8, 2016
+	VERSION: 4.26
+	AUTHOR: Carl Webster, Sr. Solutions Architect at Choice Solutions (with a lot of help from Michael B. Smith, Jeff Wouters and Iain Brighton)
+	LASTEDIT: September 12, 2016
 #>
 
 
@@ -317,14 +284,6 @@ Param(
 	[parameter(ParameterSetName="SMTP",Mandatory=$False)] 
 	[Switch]$PDF=$False,
 
-	[parameter(ParameterSetName="Text",Mandatory=$False)] 
-	[parameter(ParameterSetName="SMTP",Mandatory=$False)] 
-	[Switch]$Text=$False,
-
-	[parameter(ParameterSetName="HTML",Mandatory=$False)] 
-	[parameter(ParameterSetName="SMTP",Mandatory=$False)] 
-	[Switch]$HTML=$False,
-
 	[parameter(Mandatory=$False)] 
 	[Switch]$Hardware=$False, 
 
@@ -338,6 +297,7 @@ Param(
 	[Switch]$AddDateTime=$False,
 	
 	[parameter(Mandatory=$False)] 
+	[Alias("AA")]
 	[string]$AdminAddress="",
 
 	[parameter(Mandatory=$False)] 
@@ -391,7 +351,7 @@ Param(
 	)
 
 
-#Carl Webster, CTP and independent consultant
+#Carl Webster, CTP and Sr. Solutions Architect at Choice Solutions
 #webster@carlwebster.com
 #@carlwebster on Twitter
 #http://www.CarlWebster.com
@@ -439,6 +399,13 @@ Param(
 #	Added the option to email the output file
 #	Fixed several spacing and typo errors
 #
+#Version 4.26
+#	Added an alias AA for AdminAddress to match the other scripts that use AdminAddress
+#	If remoting is used (-AdminAddress), check if the script is being run elevated. If not,
+#		show the script needs elevation and end the script
+#	Added Break statements to most of the Switch statements
+#	Added checking the NIC's "Allow the computer to turn off this device to save power" setting
+#	Remove all references to TEXT and HTML output as those are in the 5.xx script
 
 
 Set-StrictMode -Version 2
@@ -452,17 +419,9 @@ If($PDF -eq $Null)
 {
 	$PDF = $False
 }
-If($Text -eq $Null)
-{
-	$Text = $False
-}
 If($MSWord -eq $Null)
 {
 	$MSWord = $False
-}
-If($HTML -eq $Null)
-{
-	$HTML = $False
 }
 If($AddDateTime -eq $Null)
 {
@@ -505,17 +464,9 @@ If(!(Test-Path Variable:PDF))
 {
 	$PDF = $False
 }
-If(!(Test-Path Variable:Text))
-{
-	$Text = $False
-}
 If(!(Test-Path Variable:MSWord))
 {
 	$MSWord = $False
-}
-If(!(Test-Path Variable:HTML))
-{
-	$HTML = $False
 }
 If(!(Test-Path Variable:AddDateTime))
 {
@@ -556,7 +507,7 @@ If(!(Test-Path Variable:To))
 
 If($MSWord -eq $Null)
 {
-	If($Text -or $HTML -or $PDF)
+	If($PDF)
 	{
 		$MSWord = $False
 	}
@@ -566,7 +517,7 @@ If($MSWord -eq $Null)
 	}
 }
 
-If($MSWord -eq $False -and $PDF -eq $False -and $Text -eq $False -and $HTML -eq $False)
+If($MSWord -eq $False -and $PDF -eq $False)
 {
 	$MSWord = $True
 }
@@ -581,14 +532,6 @@ ElseIf($PDF)
 {
 	Write-Verbose "$(Get-Date): PDF is set"
 }
-ElseIf($Text)
-{
-	Write-Verbose "$(Get-Date): Text is set"
-}
-ElseIf($HTML)
-{
-	Write-Verbose "$(Get-Date): HTML is set"
-}
 Else
 {
 	$ErrorActionPreference = $SaveEAPreference
@@ -601,20 +544,10 @@ Else
 	{
 		Write-Verbose "$(Get-Date): PDF is Null"
 	}
-	ElseIf($Text -eq $Null)
-	{
-		Write-Verbose "$(Get-Date): Text is Null"
-	}
-	ElseIf($HTML -eq $Null)
-	{
-		Write-Verbose "$(Get-Date): HTML is Null"
-	}
 	Else
 	{
 		Write-Verbose "$(Get-Date): MSWord is $($MSWord)"
 		Write-Verbose "$(Get-Date): PDF is $($PDF)"
-		Write-Verbose "$(Get-Date): Text is $($Text)"
-		Write-Verbose "$(Get-Date): HTML is $($HTML)"
 	}
 	Write-Error "Unable to determine output parameter.  Script cannot continue"
 	Exit
@@ -807,15 +740,6 @@ Function GetComputerWMIInfo
 		WriteWordLine 3 0 "Computer Information: $($RemoteComputerName)"
 		WriteWordLine 4 0 "General Computer"
 	}
-	ElseIf($Text)
-	{
-		Line 0 "Computer Information: $($RemoteComputerName)"
-		Line 1 "General Computer"
-	}
-	ElseIf($HTML)
-	{
-		WriteHTMLLine 3 0 "Computer Information: $($RemoteComputerName)"
-	}
 	
 	[bool]$GotComputerItems = $True
 	
@@ -852,21 +776,6 @@ Function GetComputerWMIInfo
 			WriteWordLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
 			WriteWordLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
 		}
-		ElseIf($Text)
-		{
-			Line 2 "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
-			Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-			Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-			Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
-			Line 2 ""
-		}
-		ElseIf($HTML)
-		{
-			WriteHTMLLine 0 2 "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)" "" $Null 0 $False $True
-			WriteHTMLLine 0 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository" "" $Null 0 $False $True
-			WriteHTMLLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
-			WriteHTMLLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
-		}
 	}
 	Else
 	{
@@ -874,14 +783,6 @@ Function GetComputerWMIInfo
 		If($MSWORD -or $PDF)
 		{
 			WriteWordLine 0 2 "No results Returned for Computer information" "" $Null 0 $False $True
-		}
-		ElseIf($Text)
-		{
-			Line 2 "No results Returned for Computer information"
-		}
-		ElseIf($HTML)
-		{
-			WriteHTMLLine 0 2 "No results Returned for Computer information" "" $Null 0 $False $True
 		}
 	}
 	
@@ -891,14 +792,6 @@ Function GetComputerWMIInfo
 	If($MSWord -or $PDF)
 	{
 		WriteWordLine 4 0 "Drive(s)"
-	}
-	ElseIf($Text)
-	{
-		Line 1 "Drive(s)"
-	}
-	ElseIf($HTML)
-	{
-		WriteHTMLLine 2 0 "Drive(s)"
 	}
 
 	[bool]$GotDrives = $True
@@ -938,20 +831,6 @@ Function GetComputerWMIInfo
 			WriteWordLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
 			WriteWordLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
 		}
-		ElseIf($Text)
-		{
-			Line 2 "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
-			Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-			Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-			Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
-		}
-		ElseIf($HTML)
-		{
-			WriteHTMLLine 0 2 "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)" "" $Null 0 $False $True
-			WriteHTMLLine 0 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository" "" $Null 0 $False $True
-			WriteHTMLLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
-			WriteHTMLLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
-		}
 	}
 	Else
 	{
@@ -959,14 +838,6 @@ Function GetComputerWMIInfo
 		If($MSWORD -or $PDF)
 		{
 			WriteWordLine 0 2 "No results Returned for Drive information" "" $Null 0 $False $True
-		}
-		ElseIf($Text)
-		{
-			Line 2 "No results Returned for Drive information"
-		}
-		ElseIf($HTML)
-		{
-			WriteHTMLLine 0 2 "No results Returned for Drive information" "" $Null 0 $False $True
 		}
 	}
 	
@@ -977,13 +848,6 @@ Function GetComputerWMIInfo
 	If($MSWord -or $PDF)
 	{
 		WriteWordLine 4 0 "Processor(s)"
-	}
-	ElseIf($Text)
-	{
-		Line 1 "Processor(s)"
-	}
-	ElseIf($HTML)
-	{
 	}
 
 	[bool]$GotProcessors = $True
@@ -1019,20 +883,6 @@ Function GetComputerWMIInfo
 			WriteWordLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
 			WriteWordLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
 		}
-		ElseIf($Text)
-		{
-			Line 2 "Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
-			Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-			Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-			Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
-		}
-		ElseIf($HTML)
-		{
-			WriteHTMLLine 0 2 "Get-WmiObject win32_Processor failed for $($RemoteComputerName)" "" $Null 0 $False $True
-			WriteHTMLLine 0 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository" "" $Null 0 $False $True
-			WriteHTMLLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
-			WriteHTMLLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
-		}
 	}
 	Else
 	{
@@ -1040,14 +890,6 @@ Function GetComputerWMIInfo
 		If($MSWORD -or $PDF)
 		{
 			WriteWordLine 0 2 "No results Returned for Processor information" "" $Null 0 $False $True
-		}
-		ElseIf($Text)
-		{
-			Line 2 "No results Returned for Processor information"
-		}
-		ElseIf($HTML)
-		{
-			WriteHTMLLine 0 2 "No results Returned for Processor information" "" $Null 0 $False $True
 		}
 	}
 
@@ -1057,13 +899,6 @@ Function GetComputerWMIInfo
 	If($MSWord -or $PDF)
 	{
 		WriteWordLine 4 0 "Network Interface(s)"
-	}
-	ElseIf($Text)
-	{
-		Line 1 "Network Interface(s)"
-	}
-	ElseIf($HTML)
-	{
 	}
 
 	[bool]$GotNics = $True
@@ -1123,22 +958,6 @@ Function GetComputerWMIInfo
 						WriteWordLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
 						WriteWordLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
 					}
-					ElseIf($Text)
-					{
-						Line 2 "Error retrieving NIC information"
-						Line 2 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-						Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-						Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-						Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
-					}
-					ElseIf($HTML)
-					{
-						WriteHTMLLine 0 2 "Error retrieving NIC information" "" $Null 0 $False $True
-						WriteHTMLLine 0 2 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)" "" $Null 0 $False $True
-						WriteHTMLLine 0 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository" "" $Null 0 $False $True
-						WriteHTMLLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
-						WriteHTMLLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
-					}
 				}
 				Else
 				{
@@ -1146,14 +965,6 @@ Function GetComputerWMIInfo
 					If($MSWORD -or $PDF)
 					{
 						WriteWordLine 0 2 "No results Returned for NIC information" "" $Null 0 $False $True
-					}
-					ElseIf($Text)
-					{
-						Line 2 "No results Returned for NIC information"
-					}
-					ElseIf($HTML)
-					{
-						WriteHTMLLine 0 2 "No results Returned for NIC information" "" $Null 0 $False $True
 					}
 				}
 			}
@@ -1172,22 +983,6 @@ Function GetComputerWMIInfo
 			WriteWordLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
 			WriteWordLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
 		}
-		ElseIf($Text)
-		{
-			Line 2 "Error retrieving NIC configuration information"
-			Line 2 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-			Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-			Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-			Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
-		}
-		ElseIf($HTML)
-		{
-			WriteHTMLLine 0 2 "Error retrieving NIC configuration information" "" $Null 0 $False $True
-			WriteHTMLLine 0 2 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)" "" $Null 0 $False $True
-			WriteHTMLLine 0 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository" "" $Null 0 $False $True
-			WriteHTMLLine 0 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may" "" $Null 0 $False $True
-			WriteHTMLLine 0 2 "need to rerun the script with Domain Admin credentials from the trusted Forest." "" $Null 0 $False $True
-		}
 	}
 	Else
 	{
@@ -1196,27 +991,11 @@ Function GetComputerWMIInfo
 		{
 			WriteWordLine 0 2 "No results Returned for NIC configuration information" "" $Null 0 $False $True
 		}
-		ElseIf($Text)
-		{
-			Line 2 "No results Returned for NIC configuration information"
-		}
-		ElseIf($HTML)
-		{
-			WriteHTMLLine 0 2 "No results Returned for NIC configuration information" "" $Null 0 $False $True
-		}
 	}
 	
 	If($MSWORD -or $PDF)
 	{
 		WriteWordLine 0 0 ""
-	}
-	ElseIf($Text)
-	{
-		Line 0 ""
-	}
-	ElseIf($HTML)
-	{
-		WriteHTMLLine 0 0 ""
 	}
 
 	$Results = $Null
@@ -1256,31 +1035,6 @@ Function OutputComputerItem
 		$Table = $Null
 		WriteWordLine 0 2 ""
 	}
-	ElseIf($Text)
-	{
-		Line 2 "Manufacturer`t: " $Item.manufacturer
-		Line 2 "Model`t`t: " $Item.model
-		Line 2 "Domain`t`t: " $Item.domain
-		Line 2 "Total Ram`t: $($Item.totalphysicalram) GB"
-		Line 2 "Physical Processors (sockets): " $Item.NumberOfProcessors
-		Line 2 "Logical Processors (cores w/HT): " $Item.NumberOfLogicalProcessors
-		Line 2 ""
-	}
-	ElseIf($HTML)
-	{
-		$rowdata = @()
-		$columnHeaders = @("Manufacturer",($htmlsilver -bor $htmlbold),$Item.manufacturer,$htmlwhite)
-		$rowdata += @(,('Model',($htmlsilver -bor $htmlbold),$Item.model,$htmlwhite))
-		$rowdata += @(,('Domain',($htmlsilver -bor $htmlbold),$Item.domain,$htmlwhite))
-		$rowdata += @(,('Total Ram',($htmlsilver -bor $htmlbold),"$($Item.totalphysicalram) GB",$htmlwhite))
-		$rowdata += @(,('Physical Processors (sockets)',($htmlsilver -bor $htmlbold),$Item.NumberOfProcessors,$htmlwhite))
-		$rowdata += @(,('Logical Processors (cores w/HT)',($htmlsilver -bor $htmlbold),$Item.NumberOfLogicalProcessors,$htmlwhite))
-
-		$msg = "General Computer"
-		$columnWidths = @("150px","200px")
-		FormatHTMLTable $msg -rowarray $rowdata -columnArray $columnheaders -fixedWidth $columnWidths
-		WriteHTMLLine 0 0 ""
-	}
 }
 
 Function OutputDriveItem
@@ -1290,14 +1044,14 @@ Function OutputDriveItem
 	$xDriveType = ""
 	Switch ($drive.drivetype)
 	{
-		0	{$xDriveType = "Unknown"}
-		1	{$xDriveType = "No Root Directory"}
-		2	{$xDriveType = "Removable Disk"}
-		3	{$xDriveType = "Local Disk"}
-		4	{$xDriveType = "Network Drive"}
-		5	{$xDriveType = "Compact Disc"}
-		6	{$xDriveType = "RAM Disk"}
-		Default {$xDriveType = "Unknown"}
+		0	{$xDriveType = "Unknown"; Break }
+		1	{$xDriveType = "No Root Directory"; Break }
+		2	{$xDriveType = "Removable Disk"; Break }
+		3	{$xDriveType = "Local Disk"; Break }
+		4	{$xDriveType = "Network Drive"; Break }
+		5	{$xDriveType = "Compact Disc"; Break }
+		6	{$xDriveType = "RAM Disk"; Break }
+		Default {$xDriveType = "Unknown"; Break }
 	}
 	
 	$xVolumeDirty = ""
@@ -1356,60 +1110,6 @@ Function OutputDriveItem
 		$Table = $Null
 		WriteWordLine 0 2 ""
 	}
-	ElseIf($Text)
-	{
-		Line 2 "Caption`t`t: " $drive.caption
-		Line 2 "Size`t`t: $($drive.drivesize) GB"
-		If(![String]::IsNullOrEmpty($drive.filesystem))
-		{
-			Line 2 "File System`t: " $drive.filesystem
-		}
-		Line 2 "Free Space`t: $($drive.drivefreespace) GB"
-		If(![String]::IsNullOrEmpty($drive.volumename))
-		{
-			Line 2 "Volume Name`t: " $drive.volumename
-		}
-		If(![String]::IsNullOrEmpty($drive.volumedirty))
-		{
-			Line 2 "Volume is Dirty`t: " $xVolumeDirty
-		}
-		If(![String]::IsNullOrEmpty($drive.volumeserialnumber))
-		{
-			Line 2 "Volume Serial #`t: " $drive.volumeserialnumber
-		}
-		Line 2 "Drive Type`t: " $xDriveType
-		Line 2 ""
-	}
-	ElseIf($HTML)
-	{
-		$rowdata = @()
-		$columnHeaders = @("Caption",($htmlsilver -bor $htmlbold),$Drive.caption,$htmlwhite)
-		$rowdata += @(,('Size',($htmlsilver -bor $htmlbold),"$($drive.drivesize) GB",$htmlwhite))
-
-		If(![String]::IsNullOrEmpty($drive.filesystem))
-		{
-			$rowdata += @(,('File System',($htmlsilver -bor $htmlbold),$Drive.filesystem,$htmlwhite))
-		}
-		$rowdata += @(,('Free Space',($htmlsilver -bor $htmlbold),"$($drive.drivefreespace) GB",$htmlwhite))
-		If(![String]::IsNullOrEmpty($drive.volumename))
-		{
-			$rowdata += @(,('Volume Name',($htmlsilver -bor $htmlbold),$Drive.volumename,$htmlwhite))
-		}
-		If(![String]::IsNullOrEmpty($drive.volumedirty))
-		{
-			$rowdata += @(,('Volume is Dirty',($htmlsilver -bor $htmlbold),$xVolumeDirty,$htmlwhite))
-		}
-		If(![String]::IsNullOrEmpty($drive.volumeserialnumber))
-		{
-			$rowdata += @(,('Volume Serial Number',($htmlsilver -bor $htmlbold),$Drive.volumeserialnumber,$htmlwhite))
-		}
-		$rowdata += @(,('Drive Type',($htmlsilver -bor $htmlbold),$xDriveType,$htmlwhite))
-
-		$msg = ""
-		$columnWidths = @("150px","200px")
-		FormatHTMLTable $msg -rowarray $rowdata -columnArray $columnheaders -fixedWidth $columnWidths
-		WriteHTMLLine 0 0 ""
-	}
 }
 
 Function OutputProcessorItem
@@ -1419,24 +1119,24 @@ Function OutputProcessorItem
 	$xAvailability = ""
 	Switch ($processor.availability)
 	{
-		1	{$xAvailability = "Other"}
-		2	{$xAvailability = "Unknown"}
-		3	{$xAvailability = "Running or Full Power"}
-		4	{$xAvailability = "Warning"}
-		5	{$xAvailability = "In Test"}
-		6	{$xAvailability = "Not Applicable"}
-		7	{$xAvailability = "Power Off"}
-		8	{$xAvailability = "Off Line"}
-		9	{$xAvailability = "Off Duty"}
-		10	{$xAvailability = "Degraded"}
-		11	{$xAvailability = "Not Installed"}
-		12	{$xAvailability = "Install Error"}
-		13	{$xAvailability = "Power Save - Unknown"}
-		14	{$xAvailability = "Power Save - Low Power Mode"}
-		15	{$xAvailability = "Power Save - Standby"}
-		16	{$xAvailability = "Power Cycle"}
-		17	{$xAvailability = "Power Save - Warning"}
-		Default	{$xAvailability = "Unknown"}
+		1	{$xAvailability = "Other"; Break }
+		2	{$xAvailability = "Unknown"; Break }
+		3	{$xAvailability = "Running or Full Power"; Break }
+		4	{$xAvailability = "Warning"; Break }
+		5	{$xAvailability = "In Test"; Break }
+		6	{$xAvailability = "Not Applicable"; Break }
+		7	{$xAvailability = "Power Off"; Break }
+		8	{$xAvailability = "Off Line"; Break }
+		9	{$xAvailability = "Off Duty"; Break }
+		10	{$xAvailability = "Degraded"; Break }
+		11	{$xAvailability = "Not Installed"; Break }
+		12	{$xAvailability = "Install Error"; Break }
+		13	{$xAvailability = "Power Save - Unknown"; Break }
+		14	{$xAvailability = "Power Save - Low Power Mode"; Break }
+		15	{$xAvailability = "Power Save - Standby"; Break }
+		16	{$xAvailability = "Power Cycle"; Break }
+		17	{$xAvailability = "Power Save - Warning"; Break }
+		Default	{$xAvailability = "Unknown"; Break }
 	}
 
 	If($MSWORD -or $PDF)
@@ -1480,87 +1180,51 @@ Function OutputProcessorItem
 		$Table = $Null
 		WriteWordLine 0 0 ""
 	}
-	ElseIf($Text)
-	{
-		Line 2 "Name`t`t`t: " $processor.name
-		Line 2 "Description`t`t: " $processor.description
-		Line 2 "Max Clock Speed`t`t: $($processor.maxclockspeed) MHz"
-		If($processor.l2cachesize -gt 0)
-		{
-			Line 2 "L2 Cache Size`t`t: $($processor.l2cachesize) KB"
-		}
-		If($processor.l3cachesize -gt 0)
-		{
-			Line 2 "L3 Cache Size`t`t: $($processor.l3cachesize) KB"
-		}
-		If($processor.numberofcores -gt 0)
-		{
-			Line 2 "# of Cores`t`t: " $processor.numberofcores
-		}
-		If($processor.numberoflogicalprocessors -gt 0)
-		{
-			Line 2 "# of Logical Procs (cores w/HT)`t: " $processor.numberoflogicalprocessors
-		}
-		Line 2 "Availability`t`t: " $xAvailability
-		Line 2 ""
-	}
-	ElseIf($HTML)
-	{
-		$rowdata = @()
-		$columnHeaders = @("Name",($htmlsilver -bor $htmlbold),$Processor.name,$htmlwhite)
-		$rowdata += @(,('Description',($htmlsilver -bor $htmlbold),$Processor.description,$htmlwhite))
-
-		$rowdata += @(,('Max Clock Speed',($htmlsilver -bor $htmlbold),"$($processor.maxclockspeed) MHz",$htmlwhite))
-		If($processor.l2cachesize -gt 0)
-		{
-			$rowdata += @(,('L2 Cache Size',($htmlsilver -bor $htmlbold),"$($processor.l2cachesize) KB",$htmlwhite))
-		}
-		If($processor.l3cachesize -gt 0)
-		{
-			$rowdata += @(,('L3 Cache Size',($htmlsilver -bor $htmlbold),"$($processor.l3cachesize) KB",$htmlwhite))
-		}
-		If($processor.numberofcores -gt 0)
-		{
-			$rowdata += @(,('Number of Cores',($htmlsilver -bor $htmlbold),$Processor.numberofcores,$htmlwhite))
-		}
-		If($processor.numberoflogicalprocessors -gt 0)
-		{
-			$rowdata += @(,('Number of Logical Processors (cores w/HT)',($htmlsilver -bor $htmlbold),$Processor.numberoflogicalprocessors,$htmlwhite))
-		}
-		$rowdata += @(,('Availability',($htmlsilver -bor $htmlbold),$xAvailability,$htmlwhite))
-
-		$msg = "Processor(s)"
-		$columnWidths = @("150px","200px")
-		FormatHTMLTable $msg -rowarray $rowdata -columnArray $columnheaders -fixedWidth $columnWidths
-		WriteHTMLLine 0 0 ""
-	}
 }
 
 Function OutputNicItem
 {
 	Param([object]$Nic, [object]$ThisNic)
 	
+	$powerMgmt = Get-WmiObject MSPower_DeviceEnable -Namespace root\wmi | where {$_.InstanceName -match [regex]::Escape($ThisNic.PNPDeviceID)}
+
+	If($? -and $Null -ne $powerMgmt)
+	{
+		If($powerMgmt.Enable -eq $True)
+		{
+			$PowerSaving = "Enabled"
+		}
+		Else
+		{
+			$PowerSaving = "Disabled"
+		}
+	}
+	Else
+	{
+        $PowerSaving = "N/A"
+	}
+	
 	$xAvailability = ""
 	Switch ($processor.availability)
 	{
-		1	{$xAvailability = "Other"}
-		2	{$xAvailability = "Unknown"}
-		3	{$xAvailability = "Running or Full Power"}
-		4	{$xAvailability = "Warning"}
-		5	{$xAvailability = "In Test"}
-		6	{$xAvailability = "Not Applicable"}
-		7	{$xAvailability = "Power Off"}
-		8	{$xAvailability = "Off Line"}
-		9	{$xAvailability = "Off Duty"}
-		10	{$xAvailability = "Degraded"}
-		11	{$xAvailability = "Not Installed"}
-		12	{$xAvailability = "Install Error"}
-		13	{$xAvailability = "Power Save - Unknown"}
-		14	{$xAvailability = "Power Save - Low Power Mode"}
-		15	{$xAvailability = "Power Save - Standby"}
-		16	{$xAvailability = "Power Cycle"}
-		17	{$xAvailability = "Power Save - Warning"}
-		Default	{$xAvailability = "Unknown"}
+		1	{$xAvailability = "Other"; Break }
+		2	{$xAvailability = "Unknown"; Break }
+		3	{$xAvailability = "Running or Full Power"; Break }
+		4	{$xAvailability = "Warning"; Break }
+		5	{$xAvailability = "In Test"; Break }
+		6	{$xAvailability = "Not Applicable"; Break }
+		7	{$xAvailability = "Power Off"; Break }
+		8	{$xAvailability = "Off Line"; Break }
+		9	{$xAvailability = "Off Duty"; Break }
+		10	{$xAvailability = "Degraded"; Break }
+		11	{$xAvailability = "Not Installed"; Break }
+		12	{$xAvailability = "Install Error"; Break }
+		13	{$xAvailability = "Power Save - Unknown"; Break }
+		14	{$xAvailability = "Power Save - Low Power Mode"; Break }
+		15	{$xAvailability = "Power Save - Standby"; Break }
+		16	{$xAvailability = "Power Cycle"; Break }
+		17	{$xAvailability = "Power Save - Warning"; Break }
+		Default	{$xAvailability = "Unknown"; Break }
 	}
 
 	$xIPAddress = @()
@@ -1608,10 +1272,10 @@ Function OutputNicItem
 	$xTcpipNetbiosOptions = ""
 	Switch ($nic.TcpipNetbiosOptions)
 	{
-		0	{$xTcpipNetbiosOptions = "Use NetBIOS setting from DHCP Server"}
-		1	{$xTcpipNetbiosOptions = "Enable NetBIOS"}
-		2	{$xTcpipNetbiosOptions = "Disable NetBIOS"}
-		Default	{$xTcpipNetbiosOptions = "Unknown"}
+		0	{$xTcpipNetbiosOptions = "Use NetBIOS setting from DHCP Server"; Break }
+		1	{$xTcpipNetbiosOptions = "Enable NetBIOS"; Break }
+		2	{$xTcpipNetbiosOptions = "Disable NetBIOS"; Break }
+		Default	{$xTcpipNetbiosOptions = "Unknown"; Break }
 	}
 	
 	$xwinsenablelmhostslookup = ""
@@ -1635,6 +1299,7 @@ Function OutputNicItem
 		$NicInformation += @{ Data = "Connection ID"; Value = $ThisNic.NetConnectionID; }
 		$NicInformation += @{ Data = "Manufacturer"; Value = $Nic.manufacturer; }
 		$NicInformation += @{ Data = "Availability"; Value = $xAvailability; }
+		$NicInformation += @{ Data = "Allow the computer to turn off this device to save power"; Value = $PowerSaving; }
 		$NicInformation += @{ Data = "Physical Address"; Value = $Nic.macaddress; }
 		If($xIPAddress.Count -gt 1)
 		{
@@ -1730,197 +1395,6 @@ Function OutputNicItem
 		FindWordDocumentEnd
 		$Table = $Null
 	}
-	ElseIf($Text)
-	{
-		Line 2 "Name`t`t`t: " $ThisNic.Name
-		If($ThisNic.Name -ne $nic.description)
-		{
-			Line 2 "Description`t`t: " $nic.description
-		}
-		Line 2 "Connection ID`t`t: " $ThisNic.NetConnectionID
-		Line 2 "Manufacturer`t`t: " $ThisNic.manufacturer
-		Line 2 "Availability`t`t: " $xAvailability
-		Line 2 "Physical Address`t: " $nic.macaddress
-		Line 2 "IP Address`t`t: " $xIPAddress[0]
-		$cnt = -1
-		ForEach($tmp in $xIPAddress)
-		{
-			$cnt++
-			If($cnt -gt 0)
-			{
-				Line 5 "" $tmp
-			}
-		}
-		Line 2 "Default Gateway`t`t: " $Nic.Defaultipgateway
-		Line 2 "Subnet Mask`t`t: " $xIPSubnet[0]
-		$cnt = -1
-		ForEach($tmp in $xIPSubnet)
-		{
-			$cnt++
-			If($cnt -gt 0)
-			{
-				Line 5 "" $tmp
-			}
-		}
-		If($nic.dhcpenabled)
-		{
-			$DHCPLeaseObtainedDate = $nic.ConvertToDateTime($nic.dhcpleaseobtained)
-			$DHCPLeaseExpiresDate = $nic.ConvertToDateTime($nic.dhcpleaseexpires)
-			Line 2 "DHCP Enabled`t`t: " $nic.dhcpenabled
-			Line 2 "DHCP Lease Obtained`t: " $dhcpleaseobtaineddate
-			Line 2 "DHCP Lease Expires`t: " $dhcpleaseexpiresdate
-			Line 2 "DHCP Server`t`t:" $nic.dhcpserver
-		}
-		If(![String]::IsNullOrEmpty($nic.dnsdomain))
-		{
-			Line 2 "DNS Domain`t`t: " $nic.dnsdomain
-		}
-		If($nic.dnsdomainsuffixsearchorder -ne $Null -and $nic.dnsdomainsuffixsearchorder.length -gt 0)
-		{
-			[int]$x = 1
-			Line 2 "DNS Search Suffixes`t:" $xnicdnsdomainsuffixsearchorder[0]
-			$cnt = -1
-			ForEach($tmp in $xnicdnsdomainsuffixsearchorder)
-			{
-				$cnt++
-				If($cnt -gt 0)
-				{
-					$ScriptInformation += @{ Data = ""; Value = $tmp; }
-				}
-			}
-		}
-		Line 2 "DNS WINS Enabled`t: " $xdnsenabledforwinsresolution
-		If($nic.dnsserversearchorder -ne $Null -and $nic.dnsserversearchorder.length -gt 0)
-		{
-			[int]$x = 1
-			Line 2 "DNS Servers`t`t:" $xnicdnsserversearchorder[0]
-			$cnt = -1
-			ForEach($tmp in $xnicdnsserversearchorder)
-			{
-				$cnt++
-				If($cnt -gt 0)
-				{
-					$ScriptInformation += @{ Data = ""; Value = $tmp; }
-				}
-			}
-		}
-		Line 2 "NetBIOS Setting`t`t: " $xTcpipNetbiosOptions
-		Line 2 "WINS:"
-		Line 3 "Enabled LMHosts`t: " $xwinsenablelmhostslookup
-		If(![String]::IsNullOrEmpty($nic.winshostlookupfile))
-		{
-			Line 3 "Host Lookup File`t: " $nic.winshostlookupfile
-		}
-		If(![String]::IsNullOrEmpty($nic.winsprimaryserver))
-		{
-			Line 3 "Primary Server`t`t: " $nic.winsprimaryserver
-		}
-		If(![String]::IsNullOrEmpty($nic.winssecondaryserver))
-		{
-			Line 3 "Secondary Server`t: " $nic.winssecondaryserver
-		}
-		If(![String]::IsNullOrEmpty($nic.winsscopeid))
-		{
-			Line 3 "Scope ID`t`t: " $nic.winsscopeid
-		}
-	}
-	ElseIf($HTML)
-	{
-		$rowdata = @()
-		$columnHeaders = @("Name",($htmlsilver -bor $htmlbold),$ThisNic.Name,$htmlwhite)
-		If($ThisNic.Name -ne $nic.description)
-		{
-			$rowdata += @(,('Description',($htmlsilver -bor $htmlbold),$Nic.description,$htmlwhite))
-		}
-		$rowdata += @(,('Connection ID',($htmlsilver -bor $htmlbold),$ThisNic.NetConnectionID,$htmlwhite))
-		$rowdata += @(,('Manufacturer',($htmlsilver -bor $htmlbold),$Nic.manufacturer,$htmlwhite))
-		$rowdata += @(,('Availability',($htmlsilver -bor $htmlbold),$xAvailability,$htmlwhite))
-		$rowdata += @(,('Physical Address',($htmlsilver -bor $htmlbold),$Nic.macaddress,$htmlwhite))
-		$rowdata += @(,('IP Address',($htmlsilver -bor $htmlbold),$xIPAddress[0],$htmlwhite))
-		$cnt = -1
-		ForEach($tmp in $xIPAddress)
-		{
-			$cnt++
-			If($cnt -gt 0)
-			{
-				$rowdata += @(,('IP Address',($htmlsilver -bor $htmlbold),$tmp,$htmlwhite))
-			}
-		}
-		$rowdata += @(,('Default Gateway',($htmlsilver -bor $htmlbold),$Nic.Defaultipgateway,$htmlwhite))
-		$rowdata += @(,('Subnet Mask',($htmlsilver -bor $htmlbold),$xIPSubnet[0],$htmlwhite))
-		$cnt = -1
-		ForEach($tmp in $xIPSubnet)
-		{
-			$cnt++
-			If($cnt -gt 0)
-			{
-				$rowdata += @(,('Subnet Mask',($htmlsilver -bor $htmlbold),$tmp,$htmlwhite))
-			}
-		}
-		If($nic.dhcpenabled)
-		{
-			$DHCPLeaseObtainedDate = $nic.ConvertToDateTime($nic.dhcpleaseobtained)
-			$DHCPLeaseExpiresDate = $nic.ConvertToDateTime($nic.dhcpleaseexpires)
-			$rowdata += @(,('DHCP Enabled',($htmlsilver -bor $htmlbold),$Nic.dhcpenabled,$htmlwhite))
-			$rowdata += @(,('DHCP Lease Obtained',($htmlsilver -bor $htmlbold),$dhcpleaseobtaineddate,$htmlwhite))
-			$rowdata += @(,('DHCP Lease Expires',($htmlsilver -bor $htmlbold),$dhcpleaseexpiresdate,$htmlwhite))
-			$rowdata += @(,('DHCP Server',($htmlsilver -bor $htmlbold),$Nic.dhcpserver,$htmlwhite))
-		}
-		If(![String]::IsNullOrEmpty($nic.dnsdomain))
-		{
-			$rowdata += @(,('DNS Domain',($htmlsilver -bor $htmlbold),$Nic.dnsdomain,$htmlwhite))
-		}
-		If($nic.dnsdomainsuffixsearchorder -ne $Null -and $nic.dnsdomainsuffixsearchorder.length -gt 0)
-		{
-			$rowdata += @(,('DNS Search Suffixes',($htmlsilver -bor $htmlbold),$xnicdnsdomainsuffixsearchorder[0],$htmlwhite))
-			$cnt = -1
-			ForEach($tmp in $xnicdnsdomainsuffixsearchorder)
-			{
-				$cnt++
-				If($cnt -gt 0)
-				{
-					$rowdata += @(,('',($htmlsilver -bor $htmlbold),$tmp,$htmlwhite))
-				}
-			}
-		}
-		$rowdata += @(,('DNS WINS Enabled',($htmlsilver -bor $htmlbold),$xdnsenabledforwinsresolution,$htmlwhite))
-		If($nic.dnsserversearchorder -ne $Null -and $nic.dnsserversearchorder.length -gt 0)
-		{
-			$rowdata += @(,('DNS Servers',($htmlsilver -bor $htmlbold),$xnicdnsserversearchorder[0],$htmlwhite))
-			$cnt = -1
-			ForEach($tmp in $xnicdnsserversearchorder)
-			{
-				$cnt++
-				If($cnt -gt 0)
-				{
-					$rowdata += @(,('',($htmlsilver -bor $htmlbold),$tmp,$htmlwhite))
-				}
-			}
-		}
-		$rowdata += @(,('NetBIOS Setting',($htmlsilver -bor $htmlbold),$xTcpipNetbiosOptions,$htmlwhite))
-		$rowdata += @(,('WINS: Enabled LMHosts',($htmlsilver -bor $htmlbold),$xwinsenablelmhostslookup,$htmlwhite))
-		If(![String]::IsNullOrEmpty($nic.winshostlookupfile))
-		{
-			$rowdata += @(,('Host Lookup File',($htmlsilver -bor $htmlbold),$Nic.winshostlookupfile,$htmlwhite))
-		}
-		If(![String]::IsNullOrEmpty($nic.winsprimaryserver))
-		{
-			$rowdata += @(,('Primary Server',($htmlsilver -bor $htmlbold),$Nic.winsprimaryserver,$htmlwhite))
-		}
-		If(![String]::IsNullOrEmpty($nic.winssecondaryserver))
-		{
-			$rowdata += @(,('Secondary Server',($htmlsilver -bor $htmlbold),$Nic.winssecondaryserver,$htmlwhite))
-		}
-		If(![String]::IsNullOrEmpty($nic.winsscopeid))
-		{
-			$rowdata += @(,('Scope ID',($htmlsilver -bor $htmlbold),$Nic.winsscopeid,$htmlwhite))
-		}
-
-		$msg = "Network Interface(s)"
-		$columnWidths = @("150px","200px")
-		FormatHTMLTable $msg -rowarray $rowdata -columnArray $columnheaders -fixedWidth $columnWidths
-		WriteHTMLLine 0 0 ""
-	}
 }
 #endregion
 
@@ -1954,27 +1428,17 @@ Function SetWordHashTable
 	[string]$toc = $(
 		Switch ($CultureCode)
 		{
-			'ca-'	{ 'Taula automática 2' }
-
-			'da-'	{ 'Automatisk tabel 2' }
-
-			'de-'	{ 'Automatische Tabelle 2' }
-
-			'en-'	{ 'Automatic Table 2' }
-
-			'es-'	{ 'Tabla automática 2' }
-
-			'fi-'	{ 'Automaattinen taulukko 2' }
-
-			'fr-'	{ 'Sommaire Automatique 2' }
-
-			'nb-'	{ 'Automatisk tabell 2' }
-
-			'nl-'	{ 'Automatische inhoudsopgave 2' }
-
-			'pt-'	{ 'Sumário Automático 2' }
-
-			'sv-'	{ 'Automatisk innehållsförteckning2' }
+			'ca-'	{ 'Taula automática 2'; Break }
+			'da-'	{ 'Automatisk tabel 2'; Break }
+			'de-'	{ 'Automatische Tabelle 2'; Break }
+			'en-'	{ 'Automatic Table 2'; Break }
+			'es-'	{ 'Tabla automática 2'; Break }
+			'fi-'	{ 'Automaattinen taulukko 2'; Break }
+			'fr-'	{ 'Sommaire Automatique 2'; Break }
+			'nb-'	{ 'Automatisk tabell 2'; Break }
+			'nl-'	{ 'Automatische inhoudsopgave 2'; Break }
+			'pt-'	{ 'Sumário Automático 2'; Break }
+			'sv-'	{ 'Automatisk innehållsförteckning2'; Break }
 		}
 	)
 
@@ -2020,18 +1484,18 @@ Function GetCulture
 
 	Switch ($WordValue)
 	{
-		{$CatalanArray -contains $_} {$CultureCode = "ca-"}
-		{$DanishArray -contains $_} {$CultureCode = "da-"}
-		{$DutchArray -contains $_} {$CultureCode = "nl-"}
-		{$EnglishArray -contains $_} {$CultureCode = "en-"}
-		{$FinnishArray -contains $_} {$CultureCode = "fi-"}
-		{$FrenchArray -contains $_} {$CultureCode = "fr-"}
-		{$GermanArray -contains $_} {$CultureCode = "de-"}
-		{$NorwegianArray -contains $_} {$CultureCode = "nb-"}
-		{$PortugueseArray -contains $_} {$CultureCode = "pt-"}
-		{$SpanishArray -contains $_} {$CultureCode = "es-"}
-		{$SwedishArray -contains $_} {$CultureCode = "sv-"}
-		Default {$CultureCode = "en-"}
+		{$CatalanArray -contains $_} {$CultureCode = "ca-"; Break }
+		{$DanishArray -contains $_} {$CultureCode = "da-"; Break }
+		{$DutchArray -contains $_} {$CultureCode = "nl-"; Break }
+		{$EnglishArray -contains $_} {$CultureCode = "en-"; Break }
+		{$FinnishArray -contains $_} {$CultureCode = "fi-"; Break }
+		{$FrenchArray -contains $_} {$CultureCode = "fr-"; Break }
+		{$GermanArray -contains $_} {$CultureCode = "de-"; Break }
+		{$NorwegianArray -contains $_} {$CultureCode = "nb-"; Break }
+		{$PortugueseArray -contains $_} {$CultureCode = "pt-"; Break }
+		{$SpanishArray -contains $_} {$CultureCode = "es-"; Break }
+		{$SwedishArray -contains $_} {$CultureCode = "sv-"; Break }
+		Default {$CultureCode = "en-"; Break }
 	}
 	
 	Return $CultureCode
@@ -2435,11 +1899,11 @@ Function DeviceStatus
 		WriteWordLine 0 3 "vDisk access`t`t: " -nonewline
 		Switch ($xDevice.diskVersionAccess)
 		{
-			0 {WriteWordLine 0 0 "Production"}
-			1 {WriteWordLine 0 0 "Test"}
-			2 {WriteWordLine 0 0 "Maintenance"}
-			3 {WriteWordLine 0 0 "Personal vDisk"}
-			Default {WriteWordLine 0 0 "vDisk access type could not be determined: $($xDevice.diskVersionAccess)"}
+			0 {WriteWordLine 0 0 "Production"; Break }
+			1 {WriteWordLine 0 0 "Test"; Break }
+			2 {WriteWordLine 0 0 "Maintenance"; Break }
+			3 {WriteWordLine 0 0 "Personal vDisk"; Break }
+			Default {WriteWordLine 0 0 "vDisk access type could not be determined: $($xDevice.diskVersionAccess)"; Break }
 		}
 		If($PVSVersion -eq "7")
 		{
@@ -2447,34 +1911,34 @@ Function DeviceStatus
 			WriteWordLine 0 3 "Boot mode`t`t:" -nonewline
 			Switch($xDevice.bdmBoot)
 			{
-				0 {WriteWordLine 0 0 "PXE boot"}
-				1 {WriteWordLine 0 0 "BDM disk"}
-				Default {WriteWordLine 0 0 "Boot mode could not be determined: $($xDevice.bdmBoot)"}
+				0 {WriteWordLine 0 0 "PXE boot"; Break }
+				1 {WriteWordLine 0 0 "BDM disk"; Break }
+				Default {WriteWordLine 0 0 "Boot mode could not be determined: $($xDevice.bdmBoot)"; Break }
 			}
 		}
 		Switch($xDevice.licenseType)
 		{
-			0 {WriteWordLine 0 3 "No License"}
-			1 {WriteWordLine 0 3 "Desktop License"}
-			2 {WriteWordLine 0 3 "Server License"}
-			5 {WriteWordLine 0 3 "OEM SmartClient License"}
-			6 {WriteWordLine 0 3 "XenApp License"}
-			7 {WriteWordLine 0 3 "XenDesktop License"}
-			Default {WriteWordLine 0 0 "Device license type could not be determined: $($xDevice.licenseType)"}
+			0 {WriteWordLine 0 3 "No License"; Break }
+			1 {WriteWordLine 0 3 "Desktop License"; Break }
+			2 {WriteWordLine 0 3 "Server License"; Break }
+			5 {WriteWordLine 0 3 "OEM SmartClient License"; Break }
+			6 {WriteWordLine 0 3 "XenApp License"; Break }
+			7 {WriteWordLine 0 3 "XenDesktop License"; Break }
+			Default {WriteWordLine 0 0 "Device license type could not be determined: $($xDevice.licenseType)"; Break }
 		}
 		
 		WriteWordLine 0 2 "Logging"
 		WriteWordLine 0 3 "Logging level`t`t: " -nonewline
 		Switch ($xDevice.logLevel)
 		{
-			0   {WriteWordLine 0 0 "Off"    }
-			1   {WriteWordLine 0 0 "Fatal"  }
-			2   {WriteWordLine 0 0 "Error"  }
-			3   {WriteWordLine 0 0 "Warning"}
-			4   {WriteWordLine 0 0 "Info"   }
-			5   {WriteWordLine 0 0 "Debug"  }
-			6   {WriteWordLine 0 0 "Trace"  }
-			Default {WriteWordLine 0 0 "Logging level could not be determined: $($xDevice.logLevel)"}
+			0   {WriteWordLine 0 0 "Off"; Break}
+			1   {WriteWordLine 0 0 "Fatal"; Break}
+			2   {WriteWordLine 0 0 "Error"; Break}
+			3   {WriteWordLine 0 0 "Warning"; Break}
+			4   {WriteWordLine 0 0 "Info"; Break}
+			5   {WriteWordLine 0 0 "Debug"; Break}
+			6   {WriteWordLine 0 0 "Trace"; Break}
+			Default {WriteWordLine 0 0 "Logging level could not be determined: $($xDevice.logLevel)"; Break }
 		}
 		
 		WriteWordLine 0 0 ""
@@ -2545,26 +2009,6 @@ Function Check-NeededPSSnapins
 	}
 }
 
-Function line
-#function created by Michael B. Smith, Exchange MVP
-#@essentialexchange on Twitter
-#http://TheEssentialExchange.com
-#for creating the formatted text report
-#created March 2011
-#updated March 2014
-{
-	Param( [int]$tabs = 0, [string]$name = '', [string]$value = '', [string]$newline = "`r`n", [switch]$nonewline )
-	While( $tabs -gt 0 ) { $Global:Output += "`t"; $tabs--; }
-	If( $nonewline )
-	{
-		$Global:Output += $name + $value
-	}
-	Else
-	{
-		$Global:Output += $name + $value + $newline
-	}
-}
-	
 Function WriteWordLine
 #Function created by Ryan Revord
 #@rsrevord on Twitter
@@ -2585,12 +2029,12 @@ Function WriteWordLine
 	[string]$output = ""
 	Switch ($style)
 	{
-		0 {$Script:Selection.Style = $myHash.Word_NoSpacing}
-		1 {$Script:Selection.Style = $myHash.Word_Heading1}
-		2 {$Script:Selection.Style = $myHash.Word_Heading2}
-		3 {$Script:Selection.Style = $myHash.Word_Heading3}
-		4 {$Script:Selection.Style = $myHash.Word_Heading4}
-		Default {$Script:Selection.Style = $myHash.Word_NoSpacing}
+		0 {$Script:Selection.Style = $myHash.Word_NoSpacing; Break}
+		1 {$Script:Selection.Style = $myHash.Word_Heading1; Break}
+		2 {$Script:Selection.Style = $myHash.Word_Heading2; Break}
+		3 {$Script:Selection.Style = $myHash.Word_Heading3; Break}
+		4 {$Script:Selection.Style = $myHash.Word_Heading4; Break}
+		Default {$Script:Selection.Style = $myHash.Word_NoSpacing; Break}
 	}
 	
 	#build # of tabs
@@ -3128,18 +2572,6 @@ Function ShowScriptOptions
 		Write-Verbose "$(Get-Date): Word version  : $($WordProduct)"
 		Write-Verbose "$(Get-Date): Word language : $($Script:WordLanguageValue)"
 	}
-	ElseIf($Text)
-	{
-		Write-Verbose "$(Get-Date): Save As Text  : $($Text)"
-		Write-Verbose "$(Get-Date): HW Inventory  : $($Hardware)"
-		Write-Verbose "$(Get-Date): Filename1     : $($Script:FileName1)"
-	}
-	ElseIf($HTML)
-	{
-		Write-Verbose "$(Get-Date): Save As HTML  : $($HTML)"
-		Write-Verbose "$(Get-Date): HW Inventory  : $($Hardware)"
-		Write-Verbose "$(Get-Date): Filename1     : $($Script:FileName1)"
-	}
 	If(![System.String]::IsNullOrEmpty( $SmtpServer ))
 	{
 		Write-Verbose "$(Get-Date): Smtp Server   : $($SmtpServer)"
@@ -3651,25 +3083,6 @@ Function SaveandCloseDocumentandShutdownWord
 	[gc]::WaitForPendingFinalizers()
 }
 
-Function SaveandCloseTextDocument
-{
-	If($AddDateTime)
-	{
-		$Script:FileName1 += "_$(Get-Date -f yyyy-MM-dd_HHmm).txt"
-	}
-
-	Write-Output $Global:Output | Out-File $Script:Filename1 4>$Null
-}
-
-Function SaveandCloseHTMLDocument
-{
-	If($AddDateTime)
-	{
-		$Script:FileName1 += "_$(Get-Date -f yyyy-MM-dd_HHmm).html"
-	}
-	Out-File -FilePath $Script:FileName1 -Append -InputObject "<p></p></body></html>" 4>$Null
-}
-
 Function SetFileName1andFileName2
 {
 	Param([string]$OutputFileName)
@@ -3714,30 +3127,11 @@ Function SetFileName1andFileName2
 
 		SetupWord
 	}
-	ElseIf($Text)
-	{
-		If(!$AddDateTime)
-		{
-			[string]$Script:FileName1 = "$($pwdpath)\$($OutputFileName).txt"
-		}
-	}
-	ElseIf($HTML)
-	{
-		If(!$AddDateTime)
-		{
-			[string]$Script:FileName1 = "$($pwdpath)\$($OutputFileName).html"
-		}
-	}
 }
 
 #script begins
 
 $script:startTime = get-date
-
-If($TEXT)
-{
-	$global:output = ""
-}
 
 Write-Verbose "$(Get-Date): Checking for McliPSSnapin"
 If(!(Check-NeededPSSnapins "McliPSSnapIn")){
@@ -3748,9 +3142,46 @@ If(!(Check-NeededPSSnapins "McliPSSnapIn")){
 }
 
 #setup remoting if $AdminAddress is not empty
+Function ElevatedSession
+{
+	$currentPrincipal = New-Object Security.Principal.WindowsPrincipal( [Security.Principal.WindowsIdentity]::GetCurrent() )
+
+	If($currentPrincipal.IsInRole( [Security.Principal.WindowsBuiltInRole]::Administrator ))
+	{
+		Write-Verbose "$(Get-Date): This is an elevated PowerShell session"
+		Return $True
+	}
+	Else
+	{
+		Write-Host "" -Foreground White
+		Write-Host "$(Get-Date): This is NOT an elevated PowerShell session" -Foreground White
+		Write-Host "" -Foreground White
+		Return $False
+	}
+}
+
 [bool]$Remoting = $False
 If(![System.String]::IsNullOrEmpty($AdminAddress))
 {
+	#since we are setting up remoting, the script must be run from an elevated PowerShell session
+	$Elevated = ElevatedSession
+
+	If( -not $Elevated )
+	{
+		Write-Host "Warning: " -Foreground White
+		Write-Host "Warning: Remoting to another PVS server was requested but this is not an elevated PowerShell session." -Foreground White
+		Write-Host "Warning: Using -AdminAddress requires the script be run from an elevated PowerShell session." -Foreground White
+		Write-Host "Warning: Please run the script from an elevated PowerShell session.  Script cannot continue" -Foreground White
+		Write-Host "Warning: " -Foreground White
+		Exit
+	}
+	Else
+	{
+		Write-Host "" -Foreground White
+		Write-Host "This is an elevated PowerShell session." -Foreground White
+		Write-Host "" -Foreground White
+	}
+	
 	If(![System.String]::IsNullOrEmpty($User))
 	{
 		If([System.String]::IsNullOrEmpty($Domain))
@@ -4025,10 +3456,10 @@ If($PVSVersion -eq "6" -or $PVSVersion -eq "7")
 	WriteWordLine 0 1 "Default access mode for new merge versions`t`t`t: " -nonewline
 	Switch ($Farm.mergeMode)
 	{
-		0   {WriteWordLine 0 0 "Production" }
-		1   {WriteWordLine 0 0 "Test"       }
-		2   {WriteWordLine 0 0 "Maintenance"}
-		Default {WriteWordLine 0 0 "Default access mode could not be determined: $($Farm.mergeMode)"}
+		0   {WriteWordLine 0 0 "Production"; Break}
+		1   {WriteWordLine 0 0 "Test"; Break}
+		2   {WriteWordLine 0 0 "Maintenance"; Break}
+		Default {WriteWordLine 0 0 "Default access mode could not be determined: $($Farm.mergeMode)"; Break}
 	}
 }
 
@@ -4332,14 +3763,14 @@ ForEach($PVSSite in $PVSSites)
 			WriteWordLine 0 2 "Logging level: " -nonewline
 			Switch ($Server.logLevel)
 			{
-				0   {WriteWordLine 0 0 "Off"    }
-				1   {WriteWordLine 0 0 "Fatal"  }
-				2   {WriteWordLine 0 0 "Error"  }
-				3   {WriteWordLine 0 0 "Warning"}
-				4   {WriteWordLine 0 0 "Info"   }
-				5   {WriteWordLine 0 0 "Debug"  }
-				6   {WriteWordLine 0 0 "Trace"  }
-				Default {WriteWordLine 0 0 "Logging level could not be determined: $($Server.logLevel)"}
+				0   {WriteWordLine 0 0 "Off"; Break}
+				1   {WriteWordLine 0 0 "Fatal"; Break}
+				2   {WriteWordLine 0 0 "Error"; Break}
+				3   {WriteWordLine 0 0 "Warning"; Break}
+				4   {WriteWordLine 0 0 "Info"; Break}
+				5   {WriteWordLine 0 0 "Debug"; Break}
+				6   {WriteWordLine 0 0 "Trace"; Break}
+				Default {WriteWordLine 0 0 "Logging level could not be determined: $($Server.logLevel)"; Break}
 			}
 			WriteWordLine 0 3 "File size maximum`t: $($Server.logFileSizeMax) (MB)"
 			WriteWordLine 0 3 "Backup files maximum`t: " $Server.logFileBackupCopiesMax
@@ -4660,10 +4091,10 @@ ForEach($PVSSite in $PVSSites)
 					WriteWordLine 0 3 "Subnet Affinity`t`t: " -nonewline
 					Switch ($Disk.subnetAffinity)
 					{
-						0 {WriteWordLine 0 0 "None"}
-						1 {WriteWordLine 0 0 "Best Effort"}
-						2 {WriteWordLine 0 0 "Fixed"}
-						Default {WriteWordLine 0 0 "Subnet Affinity could not be determined: $($Disk.subnetAffinity)"}
+						0 {WriteWordLine 0 0 "None"; Break}
+						1 {WriteWordLine 0 0 "Best Effort"; Break}
+						2 {WriteWordLine 0 0 "Fixed"; Break}
+						Default {WriteWordLine 0 0 "Subnet Affinity could not be determined: $($Disk.subnetAffinity)"; Break}
 					}
 					WriteWordLine 0 3 "Rebalance Enabled`t: " -nonewline
 					If($Disk.rebalanceEnabled -eq "1")
@@ -4723,18 +4154,18 @@ ForEach($PVSSite in $PVSSites)
 					WriteWordLine 0 3 "Cache type: " -nonewline
 					Switch ($Disk.writeCacheType)
 					{
-						0   {WriteWordLine 0 0 "Private Image"}
-						1   {WriteWordLine 0 0 "Cache on server"}
-						2   {WriteWordLine 0 0 "Cache encrypted on server disk" }
+						0   {WriteWordLine 0 0 "Private Image"; Break}
+						1   {WriteWordLine 0 0 "Cache on server"; Break}
+						2   {WriteWordLine 0 0 "Cache encrypted on server disk"; Break}
 						3   {
 							WriteWordLine 0 0 "Cache in device RAM"
-							WriteWordLine 0 3 "Cache Size: $($Disk.writeCacheSize) MBs"
+							WriteWordLine 0 3 "Cache Size: $($Disk.writeCacheSize) MBs"; Break
 							}
-						4   {WriteWordLine 0 0 "Cache on device's HD"}
-						5   {WriteWordLine 0 0 "Cache encrypted on device's hard disk"}
-						6   {WriteWordLine 0 0 "RAM Disk"}
-						7   {WriteWordLine 0 0 "Difference Disk"}
-						Default {WriteWordLine 0 0 "Cache type could not be determined: $($Disk.writeCacheType)"}
+						4   {WriteWordLine 0 0 "Cache on device's HD"; Break}
+						5   {WriteWordLine 0 0 "Cache encrypted on device's hard disk"; Break}
+						6   {WriteWordLine 0 0 "RAM Disk"; Break}
+						7   {WriteWordLine 0 0 "Difference Disk"; Break}
+						Default {WriteWordLine 0 0 "Cache type could not be determined: $($Disk.writeCacheType)"; Break}
 					}
 				}
 				If($Disk.activationDateEnabled -eq "0")
@@ -4815,10 +4246,10 @@ ForEach($PVSSite in $PVSSites)
 				WriteWordLine 0 3 "Microsoft license type: " -nonewline
 				Switch ($Disk.licenseMode)
 				{
-					0 {WriteWordLine 0 0 "None"                          }
-					1 {WriteWordLine 0 0 "Multiple Activation Key (MAK)" }
-					2 {WriteWordLine 0 0 "Key Management Service (KMS)"  }
-					Default {WriteWordLine 0 0 "Volume License Mode could not be determined: $($Disk.licenseMode)"}
+					0 {WriteWordLine 0 0 "None"; Break}
+					1 {WriteWordLine 0 0 "Multiple Activation Key (MAK)"; Break}
+					2 {WriteWordLine 0 0 "Key Management Service (KMS)"; Break}
+					Default {WriteWordLine 0 0 "Volume License Mode could not be determined: $($Disk.licenseMode)"; Break}
 				}
 				#options tab
 				Write-Verbose "$(Get-Date): `t`t`t`tProcessing Options Tab"
@@ -4878,20 +4309,20 @@ ForEach($PVSSite in $PVSSites)
 					WriteWordLine 0 3 "Cache type`t: " -nonewline
 					Switch ($Disk.writeCacheType)
 					{
-						0   {WriteWordLine 0 0 "Private Image"}
-						1   {WriteWordLine 0 0 "Cache on server"}
+						0   {WriteWordLine 0 0 "Private Image"; Break}
+						1   {WriteWordLine 0 0 "Cache on server"; Break}
 						3   {
 							WriteWordLine 0 0 "Cache in device RAM"
-							WriteWordLine 0 3 "Cache Size: $($Disk.writeCacheSize) MBs"
+							WriteWordLine 0 3 "Cache Size: $($Disk.writeCacheSize) MBs"; Break
 							}
-						4   {WriteWordLine 0 0 "Cache on device's hard disk"}
-						6   {WriteWordLine 0 0 "RAM Disk"}
-						7   {WriteWordLine 0 0 "Difference Disk"}
+						4   {WriteWordLine 0 0 "Cache on device's hard disk"; Break}
+						6   {WriteWordLine 0 0 "RAM Disk"; Break}
+						7   {WriteWordLine 0 0 "Difference Disk"; Break}
 						9   {
 							WriteWordLine 0 0 "Cache in device RAM with overflow on hard disk"
-							WriteWordLine 0 3 "Maximum RAM Size: $($Disk.writeCacheSize) MBs"
+							WriteWordLine 0 3 "Maximum RAM Size: $($Disk.writeCacheSize) MBs"; Break
 							}
-						Default {WriteWordLine 0 0 "Cache type could not be determined: $($Disk.writeCacheType)"}
+						Default {WriteWordLine 0 0 "Cache type could not be determined: $($Disk.writeCacheType)"; Break}
 					}
 				}
 				If(![String]::IsNullOrEmpty($Disk.menuText))
@@ -4981,10 +4412,10 @@ ForEach($PVSSite in $PVSSites)
 				WriteWordLine 0 3 "Microsoft license type: " -nonewline
 				Switch ($Disk.licenseMode)
 				{
-					0 {WriteWordLine 0 0 "None"                          }
-					1 {WriteWordLine 0 0 "Multiple Activation Key (MAK)" }
-					2 {WriteWordLine 0 0 "Key Management Service (KMS)"  }
-					Default {WriteWordLine 0 0 "Volume License Mode could not be determined: $($Disk.licenseMode)"}
+					0 {WriteWordLine 0 0 "None"; Break}
+					1 {WriteWordLine 0 0 "Multiple Activation Key (MAK)"; Break}
+					2 {WriteWordLine 0 0 "Key Management Service (KMS)"; Break}
+					Default {WriteWordLine 0 0 "Volume License Mode could not be determined: $($Disk.licenseMode)"; Break}
 				}
 
 				Write-Verbose "$(Get-Date): `t`t`t`tProcessing Auto Update Tab"
@@ -5121,25 +4552,25 @@ ForEach($PVSSite in $PVSSites)
 							WriteWordLine 0 2 "Access`t`t`t`t`t: " -NoNewLine
 							Switch ($DiskVersion.access)
 							{
-								"0" {WriteWordLine 0 0 "Production"}
-								"1" {WriteWordLine 0 0 "Maintenance"}
-								"2" {WriteWordLine 0 0 "Maintenance Highest Version"}
-								"3" {WriteWordLine 0 0 "Override"}
-								"4" {WriteWordLine 0 0 "Merge"}
-								"5" {WriteWordLine 0 0 "Merge Maintenance"}
-								"6" {WriteWordLine 0 0 "Merge Test"}
-								"7" {WriteWordLine 0 0 "Test"}
-								Default {WriteWordLine 0 0 "Access could not be determined: $($DiskVersion.access)"}
+								"0" {WriteWordLine 0 0 "Production"; Break }
+								"1" {WriteWordLine 0 0 "Maintenance"; Break }
+								"2" {WriteWordLine 0 0 "Maintenance Highest Version"; Break }
+								"3" {WriteWordLine 0 0 "Override"; Break }
+								"4" {WriteWordLine 0 0 "Merge"; Break }
+								"5" {WriteWordLine 0 0 "Merge Maintenance"; Break }
+								"6" {WriteWordLine 0 0 "Merge Test"; Break }
+								"7" {WriteWordLine 0 0 "Test"; Break }
+								Default {WriteWordLine 0 0 "Access could not be determined: $($DiskVersion.access)"; Break }
 							}
 							WriteWordLine 0 2 "Type`t`t`t`t`t: " -NoNewLine
 							Switch ($DiskVersion.type)
 							{
-								"0" {WriteWordLine 0 0 "Base"}
-								"1" {WriteWordLine 0 0 "Manual"}
-								"2" {WriteWordLine 0 0 "Automatic"}
-								"3" {WriteWordLine 0 0 "Merge"}
-								"4" {WriteWordLine 0 0 "Merge Base"}
-								Default {WriteWordLine 0 0 "Type could not be determined: $($DiskVersion.type)"}
+								"0" {WriteWordLine 0 0 "Base"; Break }
+								"1" {WriteWordLine 0 0 "Manual"; Break }
+								"2" {WriteWordLine 0 0 "Automatic"; Break }
+								"3" {WriteWordLine 0 0 "Merge"; Break }
+								"4" {WriteWordLine 0 0 "Merge Base"; Break }
+								Default {WriteWordLine 0 0 "Type could not be determined: $($DiskVersion.type)"; Break }
 							}
 							If(![String]::IsNullOrEmpty($DiskVersion.description))
 							{
@@ -5148,63 +4579,63 @@ ForEach($PVSSite in $PVSSites)
 							WriteWordLine 0 2 "Can Delete`t`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.canDelete)
 							{
-								0 {WriteWordLine 0 0 "No"}
-								1 {WriteWordLine 0 0 "Yes"}
+								0 {WriteWordLine 0 0 "No"; Break }
+								1 {WriteWordLine 0 0 "Yes"; Break }
 							}
 							WriteWordLine 0 2 "Can Merge`t`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.canMerge)
 							{
-								0 {WriteWordLine 0 0 "No"}
-								1 {WriteWordLine 0 0 "Yes"}
+								0 {WriteWordLine 0 0 "No"; Break }
+								1 {WriteWordLine 0 0 "Yes"; Break }
 							}
 							WriteWordLine 0 2 "Can Merge Base`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.canMergeBase)
 							{
-								0 {WriteWordLine 0 0 "No"}
-								1 {WriteWordLine 0 0 "Yes"}
+								0 {WriteWordLine 0 0 "No"; Break }
+								1 {WriteWordLine 0 0 "Yes"; Break }
 							}
 							WriteWordLine 0 2 "Can Promote`t`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.canPromote)
 							{
-								0 {WriteWordLine 0 0 "No"}
-								1 {WriteWordLine 0 0 "Yes"}
+								0 {WriteWordLine 0 0 "No"; Break }
+								1 {WriteWordLine 0 0 "Yes"; Break }
 							}
 							WriteWordLine 0 2 "Can Revert back to Test`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.canRevertTest)
 							{
-								0 {WriteWordLine 0 0 "No"}
-								1 {WriteWordLine 0 0 "Yes"}
+								0 {WriteWordLine 0 0 "No"; Break }
+								1 {WriteWordLine 0 0 "Yes"; Break }
 							}
 							WriteWordLine 0 2 "Can Revert back to Maintenance`t: "  -NoNewLine
 							Switch ($DiskVersion.canRevertMaintenance)
 							{
-								0 {WriteWordLine 0 0 "No"}
-								1 {WriteWordLine 0 0 "Yes"}
+								0 {WriteWordLine 0 0 "No"; Break }
+								1 {WriteWordLine 0 0 "Yes"; Break }
 							}
 							WriteWordLine 0 2 "Can Set Scheduled Date`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.canSetScheduledDate)
 							{
-								0 {WriteWordLine 0 0 "No"}
-								1 {WriteWordLine 0 0 "Yes"}
+								0 {WriteWordLine 0 0 "No"; Break }
+								1 {WriteWordLine 0 0 "Yes"; Break }
 							}
 							WriteWordLine 0 2 "Can Override`t`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.canOverride)
 							{
-								0 {WriteWordLine 0 0 "No"}
-								1 {WriteWordLine 0 0 "Yes"}
+								0 {WriteWordLine 0 0 "No"; Break }
+								1 {WriteWordLine 0 0 "Yes"; Break }
 							}
 							WriteWordLine 0 2 "Is Pending`t`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.isPending)
 							{
-								0 {WriteWordLine 0 0 "No, version Scheduled Date has occurred"}
-								1 {WriteWordLine 0 0 "Yes, version Scheduled Date has not occurred"}
+								0 {WriteWordLine 0 0 "No, version Scheduled Date has occurred"; Break }
+								1 {WriteWordLine 0 0 "Yes, version Scheduled Date has not occurred"; Break }
 							}
 							WriteWordLine 0 2 "Replication Status`t`t`t: " -NoNewLine
 							Switch ($DiskVersion.goodInventoryStatus)
 							{
-								0 {WriteWordLine 0 0 "Not available on all servers"}
-								1 {WriteWordLine 0 0 "Available on all servers"}
-								Default {WriteWordLine 0 0 "Replication status could not be determined: $($DiskVersion.goodInventoryStatus)"}
+								0 {WriteWordLine 0 0 "Not available on all servers"; Break }
+								1 {WriteWordLine 0 0 "Available on all servers"; Break }
+								Default {WriteWordLine 0 0 "Replication status could not be determined: $($DiskVersion.goodInventoryStatus)"; Break }
 							}
 							WriteWordLine 0 2 "Disk Filename`t`t`t`t: " $DiskVersion.diskFileName
 							WriteWordLine 0 0 ""
@@ -5229,10 +4660,10 @@ ForEach($PVSSite in $PVSSites)
 					WriteWordLine 0 2 "Subnet Affinity`t`t: " -nonewline
 					Switch ($Disk.subnetAffinity)
 					{
-						0 {WriteWordLine 0 0 "None"}
-						1 {WriteWordLine 0 0 "Best Effort"}
-						2 {WriteWordLine 0 0 "Fixed"}
-						Default {WriteWordLine 0 0 "Subnet Affinity could not be determined: $($Disk.subnetAffinity)"}
+						0 {WriteWordLine 0 0 "None"; Break}
+						1 {WriteWordLine 0 0 "Best Effort"; Break}
+						2 {WriteWordLine 0 0 "Fixed"; Break}
+						Default {WriteWordLine 0 0 "Subnet Affinity could not be determined: $($Disk.subnetAffinity)"; Break}
 					}
 					WriteWordLine 0 2 "Rebalance Enabled`t: " -nonewline
 					If($Disk.rebalanceEnabled -eq "1")
@@ -5283,10 +4714,10 @@ ForEach($PVSSite in $PVSSites)
 						WriteWordLine 0 3 "Type`t`t: " -nonewline
 						Switch ($vHost.type)
 						{
-							0 {WriteWordLine 0 0 "Citrix XenServer"}
-							1 {WriteWordLine 0 0 "Microsoft SCVMM/Hyper-V"}
-							2 {WriteWordLine 0 0 "VMWare vSphere/ESX"}
-							Default {WriteWordLine 0 0 "Virtualization Host type could not be determined: $($vHost.type)"}
+							0 {WriteWordLine 0 0 "Citrix XenServer"; Break}
+							1 {WriteWordLine 0 0 "Microsoft SCVMM/Hyper-V"; Break}
+							2 {WriteWordLine 0 0 "VMWare vSphere/ESX"; Break}
+							Default {WriteWordLine 0 0 "Virtualization Host type could not be determined: $($vHost.type)"; Break}
 						}
 						WriteWordLine 0 3 "Name`t`t: " $vHost.virtualHostingPoolName
 						If(![String]::IsNullOrEmpty($vHost.description))
@@ -5359,14 +4790,14 @@ ForEach($PVSSite in $PVSSites)
 					WriteWordLine 0 3 "Logging level: " -nonewline
 					Switch ($ManagedvDisk.logLevel)
 					{
-						0   {WriteWordLine 0 0 "Off"    }
-						1   {WriteWordLine 0 0 "Fatal"  }
-						2   {WriteWordLine 0 0 "Error"  }
-						3   {WriteWordLine 0 0 "Warning"}
-						4   {WriteWordLine 0 0 "Info"   }
-						5   {WriteWordLine 0 0 "Debug"  }
-						6   {WriteWordLine 0 0 "Trace"  }
-						Default {WriteWordLine 0 0 "Logging level could not be determined: $($Server.logLevel)"}
+						0   {WriteWordLine 0 0 "Off"; Break}
+						1   {WriteWordLine 0 0 "Fatal"; Break}
+						2   {WriteWordLine 0 0 "Error"; Break}
+						3   {WriteWordLine 0 0 "Warning"; Break}
+						4   {WriteWordLine 0 0 "Info"; Break}
+						5   {WriteWordLine 0 0 "Debug"; Break}
+						6   {WriteWordLine 0 0 "Trace"; Break}
+						Default {WriteWordLine 0 0 "Logging level could not be determined: $($Server.logLevel)"; Break}
 					}
 				}
 			}
@@ -5399,13 +4830,13 @@ ForEach($PVSSite in $PVSSites)
 					WriteWordLine 0 3 "Recurrence: " -nonewline
 					Switch ($Task.recurrence)
 					{
-						0 {WriteWordLine 0 0 "None"}
-						1 {WriteWordLine 0 0 "Daily Everyday"}
-						2 {WriteWordLine 0 0 "Daily Weekdays only"}
-						3 {WriteWordLine 0 0 "Weekly"}
-						4 {WriteWordLine 0 0 "Monthly Date"}
-						5 {WriteWordLine 0 0 "Monthly Type"}
-						Default {WriteWordLine 0 0 "Recurrence type could not be determined: $($Task.recurrence)"}
+						0 {WriteWordLine 0 0 "None"; Break }
+						1 {WriteWordLine 0 0 "Daily Everyday"; Break }
+						2 {WriteWordLine 0 0 "Daily Weekdays only"; Break }
+						3 {WriteWordLine 0 0 "Weekly"; Break }
+						4 {WriteWordLine 0 0 "Monthly Date"; Break }
+						5 {WriteWordLine 0 0 "Monthly Type"; Break }
+						Default {WriteWordLine 0 0 "Recurrence type could not be determined: $($Task.recurrence)"; Break }
 					}
 					If($Task.recurrence -ne "0")
 					{
@@ -5466,12 +4897,12 @@ ForEach($PVSSite in $PVSSites)
 						WriteWordLine 0 3 "On " -nonewline
 						Switch($Task.monthlyOffset)
 						{
-							1 {WriteWordLine 0 0 "First " -nonewline}
-							2 {WriteWordLine 0 0 "Second " -nonewline}
-							3 {WriteWordLine 0 0 "Third " -nonewline}
-							4 {WriteWordLine 0 0 "Fourth " -nonewline}
-							5 {WriteWordLine 0 0 "Last " -nonewline}
-							Default {WriteWordLine 0 0 "Monthly Offset could not be determined: $($Task.monthlyOffset)"}
+							1 {WriteWordLine 0 0 "First " -nonewline; Break}
+							2 {WriteWordLine 0 0 "Second " -nonewline; Break}
+							3 {WriteWordLine 0 0 "Third " -nonewline; Break}
+							4 {WriteWordLine 0 0 "Fourth " -nonewline; Break}
+							5 {WriteWordLine 0 0 "Last " -nonewline; Break}
+							Default {WriteWordLine 0 0 "Monthly Offset could not be determined: $($Task.monthlyOffset)"; Break}
 						}
 						$dayMask = @{
 							1 = "Sunday"
@@ -5514,12 +4945,12 @@ ForEach($PVSSite in $PVSSites)
 					Write-Verbose "$(Get-Date): `t`t`t`t`tProcessing ESD Tab"
 					WriteWordLine 0 2 "ESD"
 					WriteWordLine 0 3 "ESD client to use: " -nonewline
-					Switch($Task.esdType)
+					Switch ($Task.esdType)
 					{
-						""     {WriteWordLine 0 0 "None (runs a custom script on the client)"}
-						"WSUS" {WriteWordLine 0 0 "Microsoft Windows Update Service (WSUS)"}
-						"SCCM" {WriteWordLine 0 0 "Microsoft System Center Configuration Manager (SCCM)"}
-						Default {WriteWordLine 0 0 "ESD Client could not be determined: $($Task.esdType)"}
+						""     {WriteWordLine 0 0 "None (runs a custom script on the client)"; Break}
+						"WSUS" {WriteWordLine 0 0 "Microsoft Windows Update Service (WSUS)"; Break}
+						"SCCM" {WriteWordLine 0 0 "Microsoft System Center Configuration Manager (SCCM)"; Break}
+						Default {WriteWordLine 0 0 "ESD Client could not be determined: $($Task.esdType)"; Break}
 					}
 					
 					Write-Verbose "$(Get-Date): `t`t`t`t`tProcessing Scripts Tab"
@@ -5548,12 +4979,12 @@ ForEach($PVSSite in $PVSSites)
 					Write-Verbose "$(Get-Date): `t`t`t`t`tProcessing Access Tab"
 					WriteWordLine 0 2 "Access"
 					WriteWordLine 0 3 "Upon successful completion, access assigned to the vDisk: " -nonewline
-					Switch($Task.postUpdateApprove)
+					Switch ($Task.postUpdateApprove)
 					{
-						0 {WriteWordLine 0 0 "Production"}
-						1 {WriteWordLine 0 0 "Test"}
-						2 {WriteWordLine 0 0 "Maintenance"}
-						Default {WriteWordLine 0 0 "Access method for vDisk could not be determined: $($Task.postUpdateApprove)"}
+						0 {WriteWordLine 0 0 "Production"; Break}
+						1 {WriteWordLine 0 0 "Test"; Break}
+						2 {WriteWordLine 0 0 "Maintenance"; Break}
+						Default {WriteWordLine 0 0 "Access method for vDisk could not be determined: $($Task.postUpdateApprove)"; Break}
 					}
 				}
 			}
@@ -5719,11 +5150,11 @@ ForEach($PVSSite in $PVSSites)
 						WriteWordLine 0 3 "Type`t`t`t: " -nonewline
 						Switch ($Device.type)
 						{
-							0 {WriteWordLine 0 0 "Production"}
-							1 {WriteWordLine 0 0 "Test"}
-							2 {WriteWordLine 0 0 "Maintenance"}
-							3 {WriteWordLine 0 0 "Personal vDisk"}
-							Default {WriteWordLine 0 0 "Device type could not be determined: $($Device.type)"}
+							0 {WriteWordLine 0 0 "Production"; Break }
+							1 {WriteWordLine 0 0 "Test"; Break }
+							2 {WriteWordLine 0 0 "Maintenance"; Break }
+							3 {WriteWordLine 0 0 "Personal vDisk"; Break }
+							Default {WriteWordLine 0 0 "Device type could not be determined: $($Device.type)"; Break }
 						}
 					}
 					If($Device.type -ne "3")
@@ -5731,10 +5162,10 @@ ForEach($PVSSite in $PVSSites)
 						WriteWordLine 0 3 "Boot from`t`t: " -nonewline
 						Switch ($Device.bootFrom)
 						{
-							1 {WriteWordLine 0 0 "vDisk"}
-							2 {WriteWordLine 0 0 "Hard Disk"}
-							3 {WriteWordLine 0 0 "Floppy Disk"}
-							Default {WriteWordLine 0 0 "Boot from could not be determined: $($Device.bootFrom)"}
+							1 {WriteWordLine 0 0 "vDisk"; Break }
+							2 {WriteWordLine 0 0 "Hard Disk"; Break }
+							3 {WriteWordLine 0 0 "Floppy Disk"; Break }
+							Default {WriteWordLine 0 0 "Boot from could not be determined: $($Device.bootFrom)"; Break }
 						}
 					}
 					WriteWordLine 0 3 "MAC`t`t`t: " $Device.deviceMac
@@ -5802,12 +5233,12 @@ ForEach($PVSSite in $PVSSites)
 					Write-Verbose "$(Get-Date): `t`t`t`t`tProcessing Authentication Tab"
 					WriteWordLine 0 2 "Authentication"
 					WriteWordLine 0 3 "Type of authentication to use for this device: " -nonewline
-					Switch($Device.authentication)
+					Switch ($Device.authentication)
 					{
-						0 {WriteWordLine 0 0 "None"}
-						1 {WriteWordLine 0 0 "Username and password"; WriteWordLine 0 4 "Username: " $Device.user; WriteWordLine 0 4 "Password: " $Device.password}
-						2 {WriteWordLine 0 0 "External verification (User supplied method)"}
-						Default {WriteWordLine 0 0 "Authentication type could not be determined: $($Device.authentication)"}
+						0 {WriteWordLine 0 0 "None"; Break}
+						1 {WriteWordLine 0 0 "Username and password"; WriteWordLine 0 4 "Username: " $Device.user; WriteWordLine 0 4 "Password: " $Device.password; Break}
+						2 {WriteWordLine 0 0 "External verification (User supplied method)"; Break}
+						Default {WriteWordLine 0 0 "Authentication type could not be determined: $($Device.authentication)"; Break}
 					}
 					
 					Write-Verbose "$(Get-Date): `t`t`t`t`tProcessing Personality Tab"
@@ -5961,10 +5392,10 @@ ForEach($PVSSite in $PVSSites)
 				WriteWordLine 0 3 "Type`t`t: " -nonewline
 				Switch ($vHost.type)
 				{
-					0 {WriteWordLine 0 0 "Citrix XenServer"}
-					1 {WriteWordLine 0 0 "Microsoft SCVMM/Hyper-V"}
-					2 {WriteWordLine 0 0 "VMWare vSphere/ESX"}
-					Default {WriteWordLine 0 0 "Virtualization Host type could not be determined: $($vHost.type)"}
+					0 {WriteWordLine 0 0 "Citrix XenServer"; Break }
+					1 {WriteWordLine 0 0 "Microsoft SCVMM/Hyper-V"; Break }
+					2 {WriteWordLine 0 0 "VMWare vSphere/ESX"; Break }
+					Default {WriteWordLine 0 0 "Virtualization Host type could not be determined: $($vHost.type)"; Break }
 				}
 				WriteWordLine 0 3 "Name`t`t: " $vHost.virtualHostingPoolName
 				If(![String]::IsNullOrEmpty($vHost.description))
@@ -6049,191 +5480,185 @@ ForEach($PVSSite in $PVSSites)
 				## Seed the $Services row index from the second row
 				[int] $CurrentServiceIndex = 2;
 			}
-			ElseIf($Text)
-			{
-			}
-			ElseIf($HTML)
-			{
-			}
 			
 			ForEach($Audit in $Audits)
 			{
 				$Tmp = ""
 				Switch([int]$Audit.action)
 				{
-					1 { $Tmp = "AddAuthGroup"}
-					2 { $Tmp = "AddCollection"}
-					3 { $Tmp = "AddDevice"}
-					4 { $Tmp = "AddDiskLocator"}
-					5 { $Tmp = "AddFarmView"}
-					6 { $Tmp = "AddServer"}
-					7 { $Tmp = "AddSite"}
-					8 { $Tmp = "AddSiteView"}
-					9 { $Tmp = "AddStore"}
-					10 { $Tmp = "AddUserGroup"}
-					11 { $Tmp = "AddVirtualHostingPool"}
-					12 { $Tmp = "AddUpdateTask"}
-					13 { $Tmp = "AddDiskUpdateDevice"}
-					1001 { $Tmp = "DeleteAuthGroup"}
-					1002 { $Tmp = "DeleteCollection"}
-					1003 { $Tmp = "DeleteDevice"}
-					1004 { $Tmp = "DeleteDeviceDiskCacheFile"}
-					1005 { $Tmp = "DeleteDiskLocator"}
-					1006 { $Tmp = "DeleteFarmView"}
-					1007 { $Tmp = "DeleteServer"}
-					1008 { $Tmp = "DeleteServerStore"}
-					1009 { $Tmp = "DeleteSite"}
-					1010 { $Tmp = "DeleteSiteView"}
-					1011 { $Tmp = "DeleteStore"}
-					1012 { $Tmp = "DeleteUserGroup"}
-					1013 { $Tmp = "DeleteVirtualHostingPool"}
-					1014 { $Tmp = "DeleteUpdateTask"}
-					1015 { $Tmp = "DeleteDiskUpdateDevice"}
-					1016 { $Tmp = "DeleteDiskVersion"}
-					2001 { $Tmp = "RunAddDeviceToDomain"}
-					2002 { $Tmp = "RunApplyAutoUpdate"}
-					2003 { $Tmp = "RunApplyIncrementalUpdate"}
-					2004 { $Tmp = "RunArchiveAuditTrail"}
-					2005 { $Tmp = "RunAssignAuthGroup"}
-					2006 { $Tmp = "RunAssignDevice"}
-					2007 { $Tmp = "RunAssignDiskLocator"}
-					2008 { $Tmp = "RunAssignServer"}
-					2009 { $Tmp = "RunBoot"}
-					2010 { $Tmp = "RunCopyPasteDevice"}
-					2011 { $Tmp = "RunCopyPasteDisk"}
-					2012 { $Tmp = "RunCopyPasteServer"}
-					2013 { $Tmp = "RunCreateDirectory"}
-					2014 { $Tmp = "RunCreateDiskCancel"}
-					2015 { $Tmp = "RunDisableCollection"}
-					2016 { $Tmp = "RunDisableDevice"}
-					2017 { $Tmp = "RunDisableDeviceDiskLocator"}
-					2018 { $Tmp = "RunDisableDiskLocator"}
-					2019 { $Tmp = "RunDisableUserGroup"}
-					2020 { $Tmp = "RunDisableUserGroupDiskLocator"}
-					2021 { $Tmp = "RunDisplayMessage"}
-					2022 { $Tmp = "RunEnableCollection"}
-					2023 { $Tmp = "RunEnableDevice"}
-					2024 { $Tmp = "RunEnableDeviceDiskLocator"}
-					2025 { $Tmp = "RunEnableDiskLocator"}
-					2026 { $Tmp = "RunEnableUserGroup"}
-					2027 { $Tmp = "RunEnableUserGroupDiskLocator"}
-					2028 { $Tmp = "RunExportOemLicenses"}
-					2029 { $Tmp = "RunImportDatabase"}
-					2030 { $Tmp = "RunImportDevices"}
-					2031 { $Tmp = "RunImportOemLicenses"}
-					2032 { $Tmp = "RunMarkDown"}
-					2033 { $Tmp = "RunReboot"}
-					2034 { $Tmp = "RunRemoveAuthGroup"}
-					2035 { $Tmp = "RunRemoveDevice"}
-					2036 { $Tmp = "RunRemoveDeviceFromDomain"}
-					2037 { $Tmp = "RunRemoveDirectory"}
-					2038 { $Tmp = "RunRemoveDiskLocator"}
-					2039 { $Tmp = "RunResetDeviceForDomain"}
-					2040 { $Tmp = "RunResetDatabaseConnection"}
-					2041 { $Tmp = "RunRestartStreamingService"}
-					2042 { $Tmp = "RunShutdown"}
-					2043 { $Tmp = "RunStartStreamingService"}
-					2044 { $Tmp = "RunStopStreamingService"}
-					2045 { $Tmp = "RunUnlockAllDisk"}
-					2046 { $Tmp = "RunUnlockDisk"}
-					2047 { $Tmp = "RunServerStoreVolumeAccess"}
-					2048 { $Tmp = "RunServerStoreVolumeMode"}
-					2049 { $Tmp = "RunMergeDisk"}
-					2050 { $Tmp = "RunRevertDiskVersion"}
-					2051 { $Tmp = "RunPromoteDiskVersion"}
-					2052 { $Tmp = "RunCancelDiskMaintenance"}
-					2053 { $Tmp = "RunActivateDevice"}
-					2054 { $Tmp = "RunAddDiskVersion"}
-					2055 { $Tmp = "RunExportDisk"}
-					2056 { $Tmp = "RunAssignDisk"}
-					2057 { $Tmp = "RunRemoveDisk"}
-					2057 { $Tmp = "RunDiskUpdateStart"}
-					2057 { $Tmp = "RunDiskUpdateCancel"}
-					2058 { $Tmp = "RunSetOverrideVersion"}
-					2059 { $Tmp = "RunCancelTask"}
-					2060 { $Tmp = "RunClearTask"}
-					3001 { $Tmp = "RunWithReturnCreateDisk"}
-					3002 { $Tmp = "RunWithReturnCreateDiskStatus"}
-					3003 { $Tmp = "RunWithReturnMapDisk"}
-					3004 { $Tmp = "RunWithReturnRebalanceDevices"}
-					3005 { $Tmp = "RunWithReturnCreateMaintenanceVersion"}
-					3006 { $Tmp = "RunWithReturnImportDisk"}
-					4001 { $Tmp = "RunByteArrayInputImportDevices"}
-					4002 { $Tmp = "RunByteArrayInputImportOemLicenses"}
-					5001 { $Tmp = "RunByteArrayOutputArchiveAuditTrail"}
-					5002 { $Tmp = "RunByteArrayOutputExportOemLicenses"}
-					6001 { $Tmp = "SetAuthGroup"}
-					6002 { $Tmp = "SetCollection"}
-					6003 { $Tmp = "SetDevice"}
-					6004 { $Tmp = "SetDisk"}
-					6005 { $Tmp = "SetDiskLocator"}
-					6006 { $Tmp = "SetFarm"}
-					6007 { $Tmp = "SetFarmView"}
-					6008 { $Tmp = "SetServer"}
-					6009 { $Tmp = "SetServerBiosBootstrap"}
-					6010 { $Tmp = "SetServerBootstrap"}
-					6011 { $Tmp = "SetServerStore"}
-					6012 { $Tmp = "SetSite"}
-					6013 { $Tmp = "SetSiteView"}
-					6014 { $Tmp = "SetStore"}
-					6015 { $Tmp = "SetUserGroup"}
-					6016 { $Tmp = "SetVirtualHostingPool"}
-					6017 { $Tmp = "SetUpdateTask"}
-					6018 { $Tmp = "SetDiskUpdateDevice"}
-					7001 { $Tmp = "SetListDeviceBootstraps"}
-					7002 { $Tmp = "SetListDeviceBootstrapsDelete"}
-					7003 { $Tmp = "SetListDeviceBootstrapsAdd"}
-					7004 { $Tmp = "SetListDeviceCustomProperty"}
-					7005 { $Tmp = "SetListDeviceCustomPropertyDelete"}
-					7006 { $Tmp = "SetListDeviceCustomPropertyAdd"}
-					7007 { $Tmp = "SetListDeviceDiskPrinters"}
-					7008 { $Tmp = "SetListDeviceDiskPrintersDelete"}
-					7009 { $Tmp = "SetListDeviceDiskPrintersAdd"}
-					7010 { $Tmp = "SetListDevicePersonality"}
-					7011 { $Tmp = "SetListDevicePersonalityDelete"}
-					7012 { $Tmp = "SetListDevicePersonalityAdd"}
-					7013 { $Tmp = "SetListDevicePortBlockerCategories"}
-					7014 { $Tmp = "SetListDevicePortBlockerCategoriesDelete"}
-					7015 { $Tmp = "SetListDevicePortBlockerCategoriesAdd"}
-					7016 { $Tmp = "SetListDevicePortBlockerOverrides"}
-					7017 { $Tmp = "SetListDevicePortBlockerOverridesDelete"}
-					7018 { $Tmp = "SetListDevicePortBlockerOverridesAdd"}
-					7019 { $Tmp = "SetListDiskLocatorCustomProperty"}
-					7020 { $Tmp = "SetListDiskLocatorCustomPropertyDelete"}
-					7021 { $Tmp = "SetListDiskLocatorCustomPropertyAdd"}
-					7022 { $Tmp = "SetListDiskLocatorPortBlockerCategories"}
-					7023 { $Tmp = "SetListDiskLocatorPortBlockerCategoriesDelete"}
-					7024 { $Tmp = "SetListDiskLocatorPortBlockerCategoriesAdd"}
-					7025 { $Tmp = "SetListDiskLocatorPortBlockerOverrides"}
-					7026 { $Tmp = "SetListDiskLocatorPortBlockerOverridesDelete"}
-					7027 { $Tmp = "SetListDiskLocatorPortBlockerOverridesAdd"}
-					7028 { $Tmp = "SetListServerCustomProperty"}
-					7029 { $Tmp = "SetListServerCustomPropertyDelete"}
-					7030 { $Tmp = "SetListServerCustomPropertyAdd"}
-					7031 { $Tmp = "SetListUserGroupCustomProperty"}
-					7032 { $Tmp = "SetListUserGroupCustomPropertyDelete"}
-					7033 { $Tmp = "SetListUserGroupCustomPropertyAdd"}				
-					Default {$Tmp = "Unknown"}
+					1 { $Tmp = "AddAuthGroup"; Break }
+					2 { $Tmp = "AddCollection"; Break }
+					3 { $Tmp = "AddDevice"; Break }
+					4 { $Tmp = "AddDiskLocator"; Break }
+					5 { $Tmp = "AddFarmView"; Break }
+					6 { $Tmp = "AddServer"; Break }
+					7 { $Tmp = "AddSite"; Break }
+					8 { $Tmp = "AddSiteView"; Break }
+					9 { $Tmp = "AddStore"; Break }
+					10 { $Tmp = "AddUserGroup"; Break }
+					11 { $Tmp = "AddVirtualHostingPool"; Break }
+					12 { $Tmp = "AddUpdateTask"; Break }
+					13 { $Tmp = "AddDiskUpdateDevice"; Break }
+					1001 { $Tmp = "DeleteAuthGroup"; Break }
+					1002 { $Tmp = "DeleteCollection"; Break }
+					1003 { $Tmp = "DeleteDevice"; Break }
+					1004 { $Tmp = "DeleteDeviceDiskCacheFile"; Break }
+					1005 { $Tmp = "DeleteDiskLocator"; Break }
+					1006 { $Tmp = "DeleteFarmView"; Break }
+					1007 { $Tmp = "DeleteServer"; Break }
+					1008 { $Tmp = "DeleteServerStore"; Break }
+					1009 { $Tmp = "DeleteSite"; Break }
+					1010 { $Tmp = "DeleteSiteView"; Break }
+					1011 { $Tmp = "DeleteStore"; Break }
+					1012 { $Tmp = "DeleteUserGroup"; Break }
+					1013 { $Tmp = "DeleteVirtualHostingPool"; Break }
+					1014 { $Tmp = "DeleteUpdateTask"; Break }
+					1015 { $Tmp = "DeleteDiskUpdateDevice"; Break }
+					1016 { $Tmp = "DeleteDiskVersion"; Break }
+					2001 { $Tmp = "RunAddDeviceToDomain"; Break }
+					2002 { $Tmp = "RunApplyAutoUpdate"; Break }
+					2003 { $Tmp = "RunApplyIncrementalUpdate"; Break }
+					2004 { $Tmp = "RunArchiveAuditTrail"; Break }
+					2005 { $Tmp = "RunAssignAuthGroup"; Break }
+					2006 { $Tmp = "RunAssignDevice"; Break }
+					2007 { $Tmp = "RunAssignDiskLocator"; Break }
+					2008 { $Tmp = "RunAssignServer"; Break }
+					2009 { $Tmp = "RunBoot"; Break }
+					2010 { $Tmp = "RunCopyPasteDevice"; Break }
+					2011 { $Tmp = "RunCopyPasteDisk"; Break }
+					2012 { $Tmp = "RunCopyPasteServer"; Break }
+					2013 { $Tmp = "RunCreateDirectory"; Break }
+					2014 { $Tmp = "RunCreateDiskCancel"; Break }
+					2015 { $Tmp = "RunDisableCollection"; Break }
+					2016 { $Tmp = "RunDisableDevice"; Break }
+					2017 { $Tmp = "RunDisableDeviceDiskLocator"; Break }
+					2018 { $Tmp = "RunDisableDiskLocator"; Break }
+					2019 { $Tmp = "RunDisableUserGroup"; Break }
+					2020 { $Tmp = "RunDisableUserGroupDiskLocator"; Break }
+					2021 { $Tmp = "RunDisplayMessage"; Break }
+					2022 { $Tmp = "RunEnableCollection"; Break }
+					2023 { $Tmp = "RunEnableDevice"; Break }
+					2024 { $Tmp = "RunEnableDeviceDiskLocator"; Break }
+					2025 { $Tmp = "RunEnableDiskLocator"; Break }
+					2026 { $Tmp = "RunEnableUserGroup"; Break }
+					2027 { $Tmp = "RunEnableUserGroupDiskLocator"; Break }
+					2028 { $Tmp = "RunExportOemLicenses"; Break }
+					2029 { $Tmp = "RunImportDatabase"; Break }
+					2030 { $Tmp = "RunImportDevices"; Break }
+					2031 { $Tmp = "RunImportOemLicenses"; Break }
+					2032 { $Tmp = "RunMarkDown"; Break }
+					2033 { $Tmp = "RunReboot"; Break }
+					2034 { $Tmp = "RunRemoveAuthGroup"; Break }
+					2035 { $Tmp = "RunRemoveDevice"; Break }
+					2036 { $Tmp = "RunRemoveDeviceFromDomain"; Break }
+					2037 { $Tmp = "RunRemoveDirectory"; Break }
+					2038 { $Tmp = "RunRemoveDiskLocator"; Break }
+					2039 { $Tmp = "RunResetDeviceForDomain"; Break }
+					2040 { $Tmp = "RunResetDatabaseConnection"; Break }
+					2041 { $Tmp = "RunRestartStreamingService"; Break }
+					2042 { $Tmp = "RunShutdown"; Break }
+					2043 { $Tmp = "RunStartStreamingService"; Break }
+					2044 { $Tmp = "RunStopStreamingService"; Break }
+					2045 { $Tmp = "RunUnlockAllDisk"; Break }
+					2046 { $Tmp = "RunUnlockDisk"; Break }
+					2047 { $Tmp = "RunServerStoreVolumeAccess"; Break }
+					2048 { $Tmp = "RunServerStoreVolumeMode"; Break }
+					2049 { $Tmp = "RunMergeDisk"; Break }
+					2050 { $Tmp = "RunRevertDiskVersion"; Break }
+					2051 { $Tmp = "RunPromoteDiskVersion"; Break }
+					2052 { $Tmp = "RunCancelDiskMaintenance"; Break }
+					2053 { $Tmp = "RunActivateDevice"; Break }
+					2054 { $Tmp = "RunAddDiskVersion"; Break }
+					2055 { $Tmp = "RunExportDisk"; Break }
+					2056 { $Tmp = "RunAssignDisk"; Break }
+					2057 { $Tmp = "RunRemoveDisk"; Break }
+					2057 { $Tmp = "RunDiskUpdateStart"; Break }
+					2057 { $Tmp = "RunDiskUpdateCancel"; Break }
+					2058 { $Tmp = "RunSetOverrideVersion"; Break }
+					2059 { $Tmp = "RunCancelTask"; Break }
+					2060 { $Tmp = "RunClearTask"; Break }
+					3001 { $Tmp = "RunWithReturnCreateDisk"; Break }
+					3002 { $Tmp = "RunWithReturnCreateDiskStatus"; Break }
+					3003 { $Tmp = "RunWithReturnMapDisk"; Break }
+					3004 { $Tmp = "RunWithReturnRebalanceDevices"; Break }
+					3005 { $Tmp = "RunWithReturnCreateMaintenanceVersion"; Break }
+					3006 { $Tmp = "RunWithReturnImportDisk"; Break }
+					4001 { $Tmp = "RunByteArrayInputImportDevices"; Break }
+					4002 { $Tmp = "RunByteArrayInputImportOemLicenses"; Break }
+					5001 { $Tmp = "RunByteArrayOutputArchiveAuditTrail"; Break }
+					5002 { $Tmp = "RunByteArrayOutputExportOemLicenses"; Break }
+					6001 { $Tmp = "SetAuthGroup"; Break }
+					6002 { $Tmp = "SetCollection"; Break }
+					6003 { $Tmp = "SetDevice"; Break }
+					6004 { $Tmp = "SetDisk"; Break }
+					6005 { $Tmp = "SetDiskLocator"; Break }
+					6006 { $Tmp = "SetFarm"; Break }
+					6007 { $Tmp = "SetFarmView"; Break }
+					6008 { $Tmp = "SetServer"; Break }
+					6009 { $Tmp = "SetServerBiosBootstrap"; Break }
+					6010 { $Tmp = "SetServerBootstrap"; Break }
+					6011 { $Tmp = "SetServerStore"; Break }
+					6012 { $Tmp = "SetSite"; Break }
+					6013 { $Tmp = "SetSiteView"; Break }
+					6014 { $Tmp = "SetStore"; Break }
+					6015 { $Tmp = "SetUserGroup"; Break }
+					6016 { $Tmp = "SetVirtualHostingPool"; Break }
+					6017 { $Tmp = "SetUpdateTask"; Break }
+					6018 { $Tmp = "SetDiskUpdateDevice"; Break }
+					7001 { $Tmp = "SetListDeviceBootstraps"; Break }
+					7002 { $Tmp = "SetListDeviceBootstrapsDelete"; Break }
+					7003 { $Tmp = "SetListDeviceBootstrapsAdd"; Break }
+					7004 { $Tmp = "SetListDeviceCustomProperty"; Break }
+					7005 { $Tmp = "SetListDeviceCustomPropertyDelete"; Break }
+					7006 { $Tmp = "SetListDeviceCustomPropertyAdd"; Break }
+					7007 { $Tmp = "SetListDeviceDiskPrinters"; Break }
+					7008 { $Tmp = "SetListDeviceDiskPrintersDelete"; Break }
+					7009 { $Tmp = "SetListDeviceDiskPrintersAdd"; Break }
+					7010 { $Tmp = "SetListDevicePersonality"; Break }
+					7011 { $Tmp = "SetListDevicePersonalityDelete"; Break }
+					7012 { $Tmp = "SetListDevicePersonalityAdd"; Break }
+					7013 { $Tmp = "SetListDevicePortBlockerCategories"; Break }
+					7014 { $Tmp = "SetListDevicePortBlockerCategoriesDelete"; Break }
+					7015 { $Tmp = "SetListDevicePortBlockerCategoriesAdd"; Break }
+					7016 { $Tmp = "SetListDevicePortBlockerOverrides"; Break }
+					7017 { $Tmp = "SetListDevicePortBlockerOverridesDelete"; Break }
+					7018 { $Tmp = "SetListDevicePortBlockerOverridesAdd"; Break }
+					7019 { $Tmp = "SetListDiskLocatorCustomProperty"; Break }
+					7020 { $Tmp = "SetListDiskLocatorCustomPropertyDelete"; Break }
+					7021 { $Tmp = "SetListDiskLocatorCustomPropertyAdd"; Break }
+					7022 { $Tmp = "SetListDiskLocatorPortBlockerCategories"; Break }
+					7023 { $Tmp = "SetListDiskLocatorPortBlockerCategoriesDelete"; Break }
+					7024 { $Tmp = "SetListDiskLocatorPortBlockerCategoriesAdd"; Break }
+					7025 { $Tmp = "SetListDiskLocatorPortBlockerOverrides"; Break }
+					7026 { $Tmp = "SetListDiskLocatorPortBlockerOverridesDelete"; Break }
+					7027 { $Tmp = "SetListDiskLocatorPortBlockerOverridesAdd"; Break }
+					7028 { $Tmp = "SetListServerCustomProperty"; Break }
+					7029 { $Tmp = "SetListServerCustomPropertyDelete"; Break }
+					7030 { $Tmp = "SetListServerCustomPropertyAdd"; Break }
+					7031 { $Tmp = "SetListUserGroupCustomProperty"; Break }
+					7032 { $Tmp = "SetListUserGroupCustomPropertyDelete"; Break }
+					7033 { $Tmp = "SetListUserGroupCustomPropertyAdd"; Break }				
+					Default {$Tmp = "Unknown"; Break }
 				}
 				$TmpAction = $Tmp
 				$Tmp = ""
 				Switch ($Audit.type)
 				{
-					0 {$Tmp = "Many"}
-					1 {$Tmp = "AuthGroup"}
-					2 {$Tmp = "Collection"}
-					3 {$Tmp = "Device"}
-					4 {$Tmp = "Disk"}
-					5 {$Tmp = "DeskLocator"}
-					6 {$Tmp = "Farm"}
-					7 {$Tmp = "FarmView"}
-					8 {$Tmp = "Server"}
-					9 {$Tmp = "Site"}
-					10 {$Tmp = "SiteView"}
-					11 {$Tmp = "Store"}
-					12 {$Tmp = "System"}
-					13 {$Tmp = "UserGroup"}
-					Default { {$Tmp = "Undefined"}}
+					0 {$Tmp = "Many"; Break }
+					1 {$Tmp = "AuthGroup"; Break }
+					2 {$Tmp = "Collection"; Break }
+					3 {$Tmp = "Device"; Break }
+					4 {$Tmp = "Disk"; Break }
+					5 {$Tmp = "DeskLocator"; Break }
+					6 {$Tmp = "Farm"; Break }
+					7 {$Tmp = "FarmView"; Break }
+					8 {$Tmp = "Server"; Break }
+					9 {$Tmp = "Site"; Break }
+					10 {$Tmp = "SiteView"; Break }
+					11 {$Tmp = "Store"; Break }
+					12 {$Tmp = "System"; Break }
+					13 {$Tmp = "UserGroup"; Break }
+					Default { {$Tmp = "Undefined"; Break }}
 				}
 				$TmpType = $Tmp
 				$Tmp = $Null
@@ -6246,12 +5671,6 @@ ForEach($PVSSite in $PVSSites)
 					$AuditWordTable += $WordTableRowHash;
 
 					$CurrentServiceIndex++;
-				}
-				ElseIf($Text)
-				{
-				}
-				ElseIf($HTML)
-				{
 				}
 			}
 
@@ -6279,12 +5698,6 @@ ForEach($PVSSite in $PVSSites)
 				$TableRange = $Null
 				$Table = $Null
 				Write-Verbose "$(Get-Date):"
-			}
-			ElseIf($Text)
-			{
-			}
-			ElseIf($HTML)
-			{
 			}
 		}
 	}
@@ -6455,14 +5868,6 @@ If($MSWord -or $PDF)
 	## Seed the row index from the second row
 	[int] $CurrentServiceIndex = 2;
 }
-ElseIf($Text)
-{
-	Line 0 "Appendix A - Advanced Server Items (Server/Network)"
-	Line 0 ""
-}
-ElseIf($HTML)
-{
-}
 
 ForEach($Item in $AdvancedItems1)
 {
@@ -6485,22 +5890,6 @@ ForEach($Item in $AdvancedItems1)
 
 		$CurrentServiceIndex++;
 	}
-	ElseIf($Text)
-	{
-		Line 1 "Server Name: " $Item.serverName
-		Line 1 "Threads per Port: " $Item.threadsPerPort
-		Line 1 "Buffers per Thread: " $Item.buffersPerThread
-		Line 1 "Server Cache Timeout: " $Item.serverCacheTimeout
-		Line 1 "Local Concurrent IO Limit: " $Item.localConcurrentIoLimit
-		Line 1 "Remote Concurrent IO Limit: " $Item.remoteConcurrentIoLimit
-		Line 1 "Ethernet MTU: " $Item.maxTransmissionUnits
-		Line 1 "IO Burst Size: " $Item.ioBurstSize
-		Line 1 "Enable Non-blocking IO: " $Item.nonBlockingIoEnabled
-		Line 0 ""
-	}
-	ElseIf($HTML)
-	{
-	}
 }
 
 If($MSWord -or $PDF)
@@ -6520,13 +5909,6 @@ If($MSWord -or $PDF)
 	$TableRange = $Null
 	$Table = $Null
 }
-ElseIf($Text)
-{
-	#nothing to do
-}
-ElseIf($HTML)
-{
-}
 
 Write-Verbose "$(Get-Date): `tFinished Creating Appendix A - Advanced Server Items (Server/Network)"
 Write-Verbose "$(Get-Date): "
@@ -6542,14 +5924,6 @@ If($MSWord -or $PDF)
 	[System.Collections.Hashtable[]] $ItemsWordTable = @();
 	## Seed the row index from the second row
 	[int] $CurrentServiceIndex = 2;
-}
-ElseIf($Text)
-{
-	Line 0 "Appendix B - Advanced Server Items (Pacing/Device)"
-	Line 0 ""
-}
-ElseIf($HTML)
-{
 }
 
 ForEach($Item in $AdvancedItems2)
@@ -6570,19 +5944,6 @@ ForEach($Item in $AdvancedItems2)
 
 		$CurrentServiceIndex++;
 	}
-	ElseIf($Text)
-	{
-		Line 1 "Server Name: " $Item.serverName
-		Line 1 "Boot Pause Seconds: " $Item.bootPauseSeconds
-		Line 1 "Maximum Boot Time: " $Item.maxBootSeconds
-		Line 1 "Maximum Devices Booting: " $Item.maxBootDevicesAllowed
-		Line 1 "vDisk Creation Pacing: " $Item.vDiskCreatePacing
-		Line 1 "License Timeout: " $Item.licenseTimeout
-		Line 0 ""
-	}
-	ElseIf($HTML)
-	{
-	}
 }
 
 If($MSWord -or $PDF)
@@ -6601,13 +5962,6 @@ If($MSWord -or $PDF)
 	FindWordDocumentEnd
 	$Table = $Null
 }
-ElseIf($Text)
-{
-	#nothing to do
-}
-ElseIf($HTML)
-{
-}
 
 Write-Verbose "$(Get-Date): `tFinished Creating Appendix B - Advanced Server Items (Pacing/Device)"
 Write-Verbose "$(Get-Date): "
@@ -6622,14 +5976,6 @@ UpdateDocumentProperties $AbstractTitle $SubjectTitle
 If($MSWORD -or $PDF)
 {
     SaveandCloseDocumentandShutdownWord
-}
-ElseIf($Text)
-{
-    SaveandCloseTextDocument
-}
-ElseIf($HTML)
-{
-    SaveandCloseHTMLDocument
 }
 
 Write-Verbose "$(Get-Date): Script has completed"
