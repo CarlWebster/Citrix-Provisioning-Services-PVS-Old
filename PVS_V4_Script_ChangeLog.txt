@@ -5,6 +5,17 @@
 #This script written for "Benji", March 19, 2012
 #Thanks to Michael B. Smith, Joe Shonk and Stephane Thirion for testing and fine-tuning tips 
 
+#Version 4.30 19-Jan-2021
+#	Added to the Computer Hardware section, the server's Power Plan (requested by JLuhring)
+#	Changed all Verbose statements from Get-Date to Get-Date -Format G as requested by Guy Leech
+#	Changed getting the path for the PVS snapin from the environment variable for "ProgramFiles" to the console installation path (Thanks to Guy Leech)
+#	Check for the McliPSSnapIn snapin before installing the .Net snapins
+#		If the snapin already exists, there was no need to install and register the .Net V2 and V4 snapins for every script run
+#	Reformatted Appendix A to make it fit the content better
+#	Reordered parameters in an order recommended by Guy Leech
+#	Updated the help text
+#	Updated the ReadMe file
+
 #Version 4.292 10-May-2020
 #	Add checking for a Word version of 0, which indicates the Office installation needs repairing
 #	Add Receive Side Scaling setting to Function OutputNICItem
