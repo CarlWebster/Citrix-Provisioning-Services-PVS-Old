@@ -3,7 +3,7 @@
 
 <#
 .SYNOPSIS
-	Creates a complete inventory of a Citrix PVS 5.x, 6.x, or 7.x farm using Microsoft Word 
+	Creates a complete inventory of a Citrix PVS 5.x, 6.x or 7.x farm using Microsoft Word 
 	2010, 2013, or 2016.
 .DESCRIPTION
 	Creates a complete inventory of a Citrix PVS 5.x, 6.x, or 7.x farm using Microsoft Word 
