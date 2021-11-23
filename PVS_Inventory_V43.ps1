@@ -39,8 +39,8 @@
 .PARAMETER AddDateTime
 	Adds a date time stamp to the end of the file name.
 	Time stamp is in the format of yyyy-MM-dd_HHmm.
-	June 1, 2021 at 6PM is 2021-06-01_1800.
-	Output filename will be ReportName_2021-06-01_1800.docx (or .pdf).
+	June 1, 2022 at 6PM is 2022-06-01_1800.
+	Output filename will be ReportName_2022-06-01_1800.docx (or .pdf).
 	This parameter is disabled by default.
 .PARAMETER Folder
 	Specifies the optional output folder to save the output report. 
@@ -54,6 +54,26 @@
 .PARAMETER EndDate
 	End date, in MM/DD/YYYY format, for the Audit Trail report.
 	Default is today's date.
+.PARAMETER ReportFooter
+	Outputs a footer section at the end of the report.
+
+	This parameter has an alias of RF.
+	
+	Report Footer
+		Report information:
+			Created with: <Script Name> - Release Date: <Script Release Date>
+			Script version: <Script Version>
+			Started on <Date Time in Local Format>
+			Elapsed time: nn days, nn hours, nn minutes, nn.nn seconds
+			Ran from domain <Domain Name> by user <Username>
+			Ran from the folder <Folder Name>
+
+	Script Name and Script Release date are script-specific variables.
+	Start Date Time in Local Format is a script variable.
+	Elapsed time is a calculated value.
+	Domain Name is $env:USERDNSDOMAIN.
+	Username is $env:USERNAME.
+	Folder Name is a script variable.
 .PARAMETER MSWord
 	SaveAs DOCX file
 	This parameter is set True if no other output format is selected.
@@ -219,7 +239,7 @@
 		cwebster for User.
 		Script will prompt for the Domain and Password
 .EXAMPLE
-	PS C:\PSScript > .\PVS_Inventory_V43.ps1 -StartDate "01/01/2021" -EndDate "01/31/2021" 
+	PS C:\PSScript > .\PVS_Inventory_V43.ps1 -StartDate "01/01/2022" -EndDate "01/31/2022" 
 	
 	Will use all Default values.
 	HKEY_CURRENT_USER\Software\Microsoft\Office\Common\UserInfo\Company="Carl Webster"
@@ -230,7 +250,7 @@
 	Sideline for the Cover Page format.
 	Administrator for the User Name.
 	LocalHost for AdminAddress.
-	Returns all Audit Trail entries from "01/01/2021" through "01/31/2021".
+	Returns all Audit Trail entries from "01/01/2022" through "01/31/2022".
 .EXAMPLE
 	PS C:\PSScript > .\PVS_Inventory_V43.ps1 -AdminAddress PVS1 -Folder 
 	\\FileServer\ShareName
@@ -328,9 +348,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: PVS_Inventory_V43.ps1
-	VERSION: 4.30
+	VERSION: 4.31
 	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith, Jeff Wouters, and Iain Brighton)
-	LASTEDIT: January 19, 2021
+	LASTEDIT: November 23, 2021
 #>
 
 
@@ -366,6 +386,10 @@ Param(
 	[parameter(Mandatory=$False)] 
 	[Datetime]$EndDate = (Get-Date -displayhint date),
 	
+	[parameter(Mandatory=$False)] 
+	[Alias("RF")]
+	[Switch]$ReportFooter=$False,
+
 	[parameter(ParameterSetName="Word",Mandatory=$False)] 
 	[Switch]$MSWord=$False,
 
@@ -415,6 +439,26 @@ Param(
 #This script written for "Benji", March 19, 2012
 #Thanks to Michael B. Smith, Joe Shonk and Stephane Thirion for testing and fine-tuning tips 
 
+#Version 4.31 23-Nov-2021
+#	Added Function OutputReportFooter
+#	Added Parameter ReportFooter
+#		Outputs a footer section at the end of the report.
+#		Report Footer
+#			Report information:
+#				Created with: <Script Name> - Release Date: <Script Release Date>
+#				Script version: <Script Version>
+#				Started on <Date Time in Local Format>
+#				Elapsed time: nn days, nn hours, nn minutes, nn.nn seconds
+#				Ran from domain <Domain Name> by user <Username>
+#				Ran from the folder <Folder Name>
+#	Cleaned up numerous incorrect $Null comparisons
+#	In Function AbortScript, add test for the winword process and terminate it if it is running
+#	In Functions AbortScript and SaveandCloseDocumentandShutdownWord, add code from Guy Leech to test for the "Id" property before using it
+#	Updated Functions ShowScriptOptions and ProcessScriptEnd to add $ReportFooter
+#	Updated Functions AddWordTable and SetWordCellFormat
+#	Updated the help text
+#	Updated the ReadMe file
+#
 #Version 4.30 19-Jan-2021
 #	Added to the Computer Hardware section, the server's Power Plan (requested by JLuhring)
 #	Changed all Verbose statements from Get-Date to Get-Date -Format G as requested by Guy Leech
@@ -510,7 +554,13 @@ $PSDefaultParameterValues = @{"*:Verbose"=$True}
 $SaveEAPreference = $ErrorActionPreference
 $ErrorActionPreference = 'SilentlyContinue'
 
-If($MSWord -eq $Null)
+#stuff for report footer
+$script:MyVersion           = '4.31'
+$Script:ScriptName          = "PVS_Inventory_V43.ps1"
+$tmpdate                    = [datetime] "11/23/2021"
+$Script:ReleaseDate         = $tmpdate.ToUniversalTime().ToShortDateString()
+
+If($Null -eq $MSWord)
 {
 	If($PDF)
 	{
@@ -541,11 +591,11 @@ Else
 {
 	$ErrorActionPreference = $SaveEAPreference
 	Write-Verbose "$(Get-Date -Format G): Unable to determine output parameter"
-	If($MSWord -eq $Null)
+	If($Null -eq $MSWord)
 	{
 		Write-Verbose "$(Get-Date -Format G): MSWord is Null"
 	}
-	ElseIf($PDF -eq $Null)
+	ElseIf($Null -eq $PDF)
 	{
 		Write-Verbose "$(Get-Date -Format G): PDF is Null"
 	}
@@ -1077,7 +1127,7 @@ Function GetComputerWMIInfo
 		$Nics = $Results | Where-Object {$Null -ne $_.ipaddress}
 		$Results = $Null
 
-		If($Nics -eq $Null ) 
+		If($Null -eq $Nics) 
 		{ 
 			$GotNics = $False 
 		} 
@@ -1511,7 +1561,7 @@ Function OutputNicItem
 		$xIPSubnet += "$($IPSubnet)"
 	}
 
-	If($nic.dnsdomainsuffixsearchorder -ne $Null -and $nic.dnsdomainsuffixsearchorder.length -gt 0)
+	If($Null -ne $nic.dnsdomainsuffixsearchorder -and $nic.dnsdomainsuffixsearchorder.length -gt 0)
 	{
 		$nicdnsdomainsuffixsearchorder = $nic.dnsdomainsuffixsearchorder
 		$xnicdnsdomainsuffixsearchorder = @()
@@ -1521,7 +1571,7 @@ Function OutputNicItem
 		}
 	}
 	
-	If($nic.dnsserversearchorder -ne $Null -and $nic.dnsserversearchorder.length -gt 0)
+	If($Null -ne $nic.dnsserversearchorder -and $nic.dnsserversearchorder.length -gt 0)
 	{
 		$nicdnsserversearchorder = $nic.dnsserversearchorder
 		$xnicdnsserversearchorder = @()
@@ -1609,7 +1659,7 @@ Function OutputNicItem
 		{
 			$NicInformation += @{ Data = "DNS Domain"; Value = $Nic.dnsdomain; }
 		}
-		If($nic.dnsdomainsuffixsearchorder -ne $Null -and $nic.dnsdomainsuffixsearchorder.length -gt 0)
+		If($Null -ne $nic.dnsdomainsuffixsearchorder -and $nic.dnsdomainsuffixsearchorder.length -gt 0)
 		{
 			$NicInformation += @{ Data = "DNS Search Suffixes"; Value = $xnicdnsdomainsuffixsearchorder[0]; }
 			$cnt = -1
@@ -1623,7 +1673,7 @@ Function OutputNicItem
 			}
 		}
 		$NicInformation += @{ Data = "DNS WINS Enabled"; Value = $xdnsenabledforwinsresolution; }
-		If($nic.dnsserversearchorder -ne $Null -and $nic.dnsserversearchorder.length -gt 0)
+		If($Null -ne $nic.dnsserversearchorder -and $nic.dnsserversearchorder.length -gt 0)
 		{
 			$NicInformation += @{ Data = "DNS Servers"; Value = $xnicdnsserversearchorder[0]; }
 			$cnt = -1
@@ -2053,18 +2103,27 @@ Function ValidateCoverPage
 
 Function CheckWordPrereq
 {
-	If((Test-Path  REGISTRY::HKEY_CLASSES_ROOT\Word.Application) -eq $False)
+	If((Test-Path REGISTRY::HKEY_CLASSES_ROOT\Word.Application) -eq $False)
 	{
 		$ErrorActionPreference = $SaveEAPreference
-		Write-Host "`n`n`t`tThis script directly outputs to Microsoft Word, please install Microsoft Word`n`n"
-		Exit
+		
+		If(($MSWord -eq $False) -and ($PDF -eq $True))
+		{
+			Write-Host "`n`n`t`tThis script uses Microsoft Word's SaveAs PDF function, please install Microsoft Word`n`n"
+			Exit
+		}
+		Else
+		{
+			Write-Host "`n`n`t`tThis script directly outputs to Microsoft Word, please install Microsoft Word`n`n"
+			Exit
+		}
 	}
 
 	#find out our session (usually "1" except on TS/RDC or Citrix)
 	$SessionID = (Get-Process -PID $PID).SessionId
 	
-	#Find out if winword is running in our session
-	[bool]$wordrunning = ((Get-Process 'WinWord' -ea 0) | Where-Object {$_.SessionId -eq $SessionID}) -ne $Null
+	#Find out if winword runsning in our session
+	[bool]$wordrunning = $null –ne ((Get-Process 'WinWord' -ea 0) | Where-Object {$_.SessionId -eq $SessionID})
 	If($wordrunning)
 	{
 		$ErrorActionPreference = $SaveEAPreference
@@ -2139,7 +2198,7 @@ Function BuildPVSObject
 		{
 			If($record.length -gt 5 -and $record.substring(0,6) -eq "Record")
 			{
-				If($SingleObject -ne $Null)
+				If($Null -ne $SingleObject)
 				{
 					$PluralObject += $SingleObject
 				}
@@ -2171,7 +2230,7 @@ Function DeviceStatus
 {
 	Param($xDevice)
 
-	If($xDevice -eq $Null -or $xDevice.status -eq "" -or $xDevice.status -eq "0")
+	If($Null -eq $xDevice -or $xDevice.status -eq "" -or $xDevice.status -eq "0")
 	{
 		WriteWordLine 0 3 "Target device inactive"
 	}
@@ -2386,15 +2445,35 @@ Function _SetDocumentProperty
 
 Function AbortScript
 {
-	$Script:Word.quit()
-	Write-Verbose "$(Get-Date -Format G): System Cleanup"
-	[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Script:Word) | Out-Null
-	If(Test-Path variable:global:word)
+	If($MSWord -or $PDF)
 	{
-		Remove-Variable -Name word -Scope Global
+		Write-Verbose "$(Get-Date -Format G): System Cleanup"
+		If(Test-Path variable:global:word)
+		{
+			$Script:Word.quit()
+			[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Script:Word) | Out-Null
+			Remove-Variable -Name word -Scope Global 4>$Null
+		}
 	}
 	[gc]::collect() 
 	[gc]::WaitForPendingFinalizers()
+
+	If($MSWord -or $PDF)
+	{
+		#is the winword Process still running? kill it
+
+		#find out our session (usually "1" except on TS/RDC or Citrix)
+		$SessionID = (Get-Process -PID $PID).SessionId
+
+		#Find out if winword running in our session
+		$wordprocess = ((Get-Process 'WinWord' -ea 0) | Where-Object {$_.SessionId -eq $SessionID}) | Select-Object -Property Id 
+		If( $wordprocess -and $wordprocess.Id -gt 0)
+		{
+			Write-Verbose "$(Get-Date -Format G): WinWord Process is still running. Attempting to stop WinWord Process # $($wordprocess.Id)"
+			Stop-Process $wordprocess.Id -EA 0
+		}
+	}
+	
 	Write-Verbose "$(Get-Date -Format G): Script has been aborted"
 	$ErrorActionPreference = $SaveEAPreference
 	Exit
@@ -2461,56 +2540,57 @@ Function AddWordTable
 	Param
 	(
 		# Array of Hashtable (including table headers)
-		[Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true, ParameterSetName='Hashtable', Position=0)]
+		[Parameter(Mandatory=$True, ValueFromPipelineByPropertyName=$True, ParameterSetName='Hashtable', Position=0)]
 		[ValidateNotNullOrEmpty()] [System.Collections.Hashtable[]] $Hashtable,
 		# Array of PSCustomObjects
-		[Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true, ParameterSetName='CustomObject', Position=0)]
+		[Parameter(Mandatory=$True, ValueFromPipelineByPropertyName=$True, ParameterSetName='CustomObject', Position=0)]
 		[ValidateNotNullOrEmpty()] [PSCustomObject[]] $CustomObject,
 		# Array of Hashtable key names or PSCustomObject property names to include, in display order.
 		# If not supplied then all Hashtable keys or all PSCustomObject properties will be displayed.
-		[Parameter(ValueFromPipelineByPropertyName=$true)] [AllowNull()] [string[]] $Columns = $null,
+		[Parameter(ValueFromPipelineByPropertyName=$True)] [AllowNull()] [string[]] $Columns = $Null,
 		# Array of custom table header strings in display order.
-		[Parameter(ValueFromPipelineByPropertyName=$true)] [AllowNull()] [string[]] $Headers = $null,
+		[Parameter(ValueFromPipelineByPropertyName=$True)] [AllowNull()] [string[]] $Headers = $Null,
 		# AutoFit table behavior.
-		[Parameter(ValueFromPipelineByPropertyName=$true)] [AllowNull()] [int] $AutoFit = -1,
+		[Parameter(ValueFromPipelineByPropertyName=$True)] [AllowNull()] [int] $AutoFit = -1,
 		# List view (no headers)
 		[Switch] $List,
 		# Grid lines
 		[Switch] $NoGridLines,
+		[Switch] $NoInternalGridLines,
 		# Built-in Word table formatting style constant
 		# Would recommend only $wdTableFormatContempory for normal usage (possibly $wdTableFormatList5 for List view)
-		[Parameter(ValueFromPipelineByPropertyName=$true)] [int] $Format = 0
+		[Parameter(ValueFromPipelineByPropertyName=$True)] [int] $Format = 0
 	)
 
 	Begin 
 	{
 		Write-Debug ("Using parameter set '{0}'" -f $PSCmdlet.ParameterSetName);
 		## Check if -Columns wasn't specified but -Headers were (saves some additional parameter sets!)
-		If(($Columns -eq $null) -and ($Headers -ne $null)) 
+		If(($Null -eq $Columns) -and ($Null -eq $Headers)) 
 		{
 			Write-Warning "No columns specified and therefore, specified headers will be ignored.";
-			$Columns = $null;
+			$Columns = $Null;
 		}
-		ElseIf(($Columns -ne $null) -and ($Headers -ne $null)) 
+		ElseIf(($Null -ne $Columns) -and ($Null -ne $Headers)) 
 		{
 			## Check if number of specified -Columns matches number of specified -Headers
 			If($Columns.Length -ne $Headers.Length) 
 			{
 				Write-Error "The specified number of columns does not match the specified number of headers.";
 			}
-		} ## end elseif
+		} ## end ElseIf
 	} ## end Begin
 
 	Process
 	{
 		## Build the Word table data string to be converted to a range and then a table later.
-        [System.Text.StringBuilder] $WordRangeString = New-Object System.Text.StringBuilder;
+		[System.Text.StringBuilder] $WordRangeString = New-Object System.Text.StringBuilder;
 
 		Switch ($PSCmdlet.ParameterSetName) 
 		{
 			'CustomObject' 
 			{
-				If($Columns -eq $null) 
+				If($Null -eq $Columns) 
 				{
 					## Build the available columns from all availble PSCustomObject note properties
 					[string[]] $Columns = @();
@@ -2524,19 +2604,19 @@ Function AddWordTable
 				## Add the table headers from -Headers or -Columns (except when in -List(view)
 				If(-not $List) 
 				{
-					Write-Debug ("$(Get-Date): `t`tBuilding table headers");
-					If($Headers -ne $null) 
+					Write-Debug ("$(Get-Date -Format G): `t`tBuilding table headers");
+					If($Null -ne $Headers) 
 					{
-                        [ref] $null = $WordRangeString.AppendFormat("{0}`n", [string]::Join("`t", $Headers));
+                        [ref] $Null = $WordRangeString.AppendFormat("{0}`n", [string]::Join("`t", $Headers));
 					}
 					Else 
 					{ 
-                        [ref] $null = $WordRangeString.AppendFormat("{0}`n", [string]::Join("`t", $Columns));
+                        [ref] $Null = $WordRangeString.AppendFormat("{0}`n", [string]::Join("`t", $Columns));
 					}
 				}
 
 				## Iterate through each PSCustomObject
-				Write-Debug ("$(Get-Date): `t`tBuilding table rows");
+				Write-Debug ("$(Get-Date -Format G): `t`tBuilding table rows");
 				ForEach($Object in $CustomObject) 
 				{
 					$OrderedValues = @();
@@ -2546,14 +2626,14 @@ Function AddWordTable
 						$OrderedValues += $Object.$Column; 
 					}
 					## Use the ordered list to add each column in specified order
-                    [ref] $null = $WordRangeString.AppendFormat("{0}`n", [string]::Join("`t", $OrderedValues));
-				} ## end foreach
-				Write-Debug ("$(Get-Date): `t`t`tAdded '{0}' table rows" -f ($CustomObject.Count));
+					[ref] $Null = $WordRangeString.AppendFormat("{0}`n", [string]::Join("`t", $OrderedValues));
+				} ## end ForEach
+				Write-Debug ("$(Get-Date -Format G): `t`t`tAdded '{0}' table rows" -f ($CustomObject.Count));
 			} ## end CustomObject
 
 			Default 
 			{   ## Hashtable
-				If($Columns -eq $null) 
+				If($Null -eq $Columns) 
 				{
 					## Build the available columns from all available hashtable keys. Hopefully
 					## all Hashtables have the same keys (they should for a table).
@@ -2563,19 +2643,19 @@ Function AddWordTable
 				## Add the table headers from -Headers or -Columns (except when in -List(view)
 				If(-not $List) 
 				{
-					Write-Debug ("$(Get-Date): `t`tBuilding table headers");
-					If($Headers -ne $null) 
+					Write-Debug ("$(Get-Date -Format G): `t`tBuilding table headers");
+					If($Null -ne $Headers) 
 					{ 
-                        [ref] $null = $WordRangeString.AppendFormat("{0}`n", [string]::Join("`t", $Headers));
+						[ref] $Null = $WordRangeString.AppendFormat("{0}`n", [string]::Join("`t", $Headers));
 					}
 					Else 
 					{
-                        [ref] $null = $WordRangeString.AppendFormat("{0}`n", [string]::Join("`t", $Columns));
+						[ref] $Null = $WordRangeString.AppendFormat("{0}`n", [string]::Join("`t", $Columns));
 					}
 				}
                 
 				## Iterate through each Hashtable
-				Write-Debug ("$(Get-Date): `t`tBuilding table rows");
+				Write-Debug ("$(Get-Date -Format G): `t`tBuilding table rows");
 				ForEach($Hash in $Hashtable) 
 				{
 					$OrderedValues = @();
@@ -2585,15 +2665,15 @@ Function AddWordTable
 						$OrderedValues += $Hash.$Column; 
 					}
 					## Use the ordered list to add each column in specified order
-                    [ref] $null = $WordRangeString.AppendFormat("{0}`n", [string]::Join("`t", $OrderedValues));
-				} ## end foreach
+					[ref] $Null = $WordRangeString.AppendFormat("{0}`n", [string]::Join("`t", $OrderedValues));
+				} ## end ForEach
 
-				Write-Debug ("$(Get-Date): `t`t`tAdded '{0}' table rows" -f $Hashtable.Count);
+				Write-Debug ("$(Get-Date -Format G): `t`t`tAdded '{0}' table rows" -f $Hashtable.Count);
 			} ## end default
-		} ## end switch
+		} ## end Switch
 
 		## Create a MS Word range and set its text to our tab-delimited, concatenated string
-		Write-Debug ("$(Get-Date): `t`tBuilding table range");
+		Write-Debug ("$(Get-Date -Format G): `t`tBuilding table range");
 		$WordRange = $Script:Doc.Application.Selection.Range;
 		$WordRange.Text = $WordRangeString.ToString();
 
@@ -2604,38 +2684,38 @@ Function AddWordTable
 		If($Format -ge 0) 
 		{
 			$ConvertToTableArguments.Add("Format", $Format);
-			$ConvertToTableArguments.Add("ApplyBorders", $true);
-			$ConvertToTableArguments.Add("ApplyShading", $true);
-			$ConvertToTableArguments.Add("ApplyFont", $true);
-			$ConvertToTableArguments.Add("ApplyColor", $true);
+			$ConvertToTableArguments.Add("ApplyBorders", $True);
+			$ConvertToTableArguments.Add("ApplyShading", $True);
+			$ConvertToTableArguments.Add("ApplyFont", $True);
+			$ConvertToTableArguments.Add("ApplyColor", $True);
 			If(!$List) 
 			{ 
-				$ConvertToTableArguments.Add("ApplyHeadingRows", $true); 
+				$ConvertToTableArguments.Add("ApplyHeadingRows", $True); 
 			}
-			$ConvertToTableArguments.Add("ApplyLastRow", $true);
-			$ConvertToTableArguments.Add("ApplyFirstColumn", $true);
-			$ConvertToTableArguments.Add("ApplyLastColumn", $true);
+			$ConvertToTableArguments.Add("ApplyLastRow", $True);
+			$ConvertToTableArguments.Add("ApplyFirstColumn", $True);
+			$ConvertToTableArguments.Add("ApplyLastColumn", $True);
 		}
 
 		## Invoke ConvertToTable method - with named arguments - to convert Word range to a table
 		## See http://msdn.microsoft.com/en-us/library/office/aa171893(v=office.11).aspx
-		Write-Debug ("$(Get-Date): `t`tConverting range to table");
+		Write-Debug ("$(Get-Date -Format G): `t`tConverting range to table");
 		## Store the table reference just in case we need to set alternate row coloring
 		$WordTable = $WordRange.GetType().InvokeMember(
 			"ConvertToTable",                               # Method name
 			[System.Reflection.BindingFlags]::InvokeMethod, # Flags
-			$null,                                          # Binder
+			$Null,                                          # Binder
 			$WordRange,                                     # Target (self!)
 			([Object[]]($ConvertToTableArguments.Values)),  ## Named argument values
-			$null,                                          # Modifiers
-			$null,                                          # Culture
+			$Null,                                          # Modifiers
+			$Null,                                          # Culture
 			([String[]]($ConvertToTableArguments.Keys))     ## Named argument names
 		);
 
 		## Implement grid lines (will wipe out any existing formatting
 		If($Format -lt 0) 
 		{
-			Write-Debug ("$(Get-Date): `t`tSetting table format");
+			Write-Debug ("$(Get-Date -Format G): `t`tSetting table format");
 			$WordTable.Style = $Format;
 		}
 
@@ -2645,12 +2725,25 @@ Function AddWordTable
 			$WordTable.AutoFitBehavior($AutoFit); 
 		}
 
-		#the next line causes the heading row to flow across page breaks
-		$WordTable.Rows.First.Headingformat = $wdHeadingFormatTrue;
+		If(!$List)
+		{
+			#the next line causes the heading row to flow across page breaks
+			$WordTable.Rows.First.Headingformat = $wdHeadingFormatTrue;
+		}
 
 		If(!$NoGridLines) 
 		{
 			$WordTable.Borders.InsideLineStyle = $wdLineStyleSingle;
+			$WordTable.Borders.OutsideLineStyle = $wdLineStyleSingle;
+		}
+		If($NoGridLines) 
+		{
+			$WordTable.Borders.InsideLineStyle = $wdLineStyleNone;
+			$WordTable.Borders.OutsideLineStyle = $wdLineStyleNone;
+		}
+		If($NoInternalGridLines) 
+		{
+			$WordTable.Borders.InsideLineStyle = $wdLineStyleNone;
 			$WordTable.Borders.OutsideLineStyle = $wdLineStyleSingle;
 		}
 
@@ -2704,21 +2797,21 @@ Function SetWordCellFormat
 	[CmdletBinding(DefaultParameterSetName='Collection')]
 	Param (
 		# Word COM object cell collection reference
-		[Parameter(Mandatory=$true, ValueFromPipeline=$true, ParameterSetName='Collection', Position=0)] [ValidateNotNullOrEmpty()] $Collection,
+		[Parameter(Mandatory=$True, ValueFromPipeline=$True, ParameterSetName='Collection', Position=0)] [ValidateNotNullOrEmpty()] $Collection,
 		# Word COM object individual cell reference
-		[Parameter(Mandatory=$true, ParameterSetName='Cell', Position=0)] [ValidateNotNullOrEmpty()] $Cell,
+		[Parameter(Mandatory=$True, ParameterSetName='Cell', Position=0)] [ValidateNotNullOrEmpty()] $Cell,
 		# Hashtable of cell co-ordinates
-		[Parameter(Mandatory=$true, ParameterSetName='Hashtable', Position=0)] [ValidateNotNullOrEmpty()] [System.Collections.Hashtable[]] $Coordinates,
+		[Parameter(Mandatory=$True, ParameterSetName='Hashtable', Position=0)] [ValidateNotNullOrEmpty()] [System.Collections.Hashtable[]] $Coordinates,
 		# Word COM object table reference
-		[Parameter(Mandatory=$true, ParameterSetName='Hashtable', Position=1)] [ValidateNotNullOrEmpty()] $Table,
+		[Parameter(Mandatory=$True, ParameterSetName='Hashtable', Position=1)] [ValidateNotNullOrEmpty()] $Table,
 		# Font name
-		[Parameter()] [AllowNull()] [string] $Font = $null,
+		[Parameter()] [AllowNull()] [string] $Font = $Null,
 		# Font color
-		[Parameter()] [AllowNull()] $Color = $null,
+		[Parameter()] [AllowNull()] $Color = $Null,
 		# Font size
 		[Parameter()] [ValidateNotNullOrEmpty()] [int] $Size = 0,
 		# Cell background color
-		[Parameter()] [AllowNull()] [int]$BackgroundColor = $null,
+		[Parameter()] [AllowNull()] [int]$BackgroundColor = $Null,
 		# Force solid background color
 		[Switch] $Solid,
 		[Switch] $Bold,
@@ -2738,25 +2831,25 @@ Function SetWordCellFormat
 			'Collection' {
 				ForEach($Cell in $Collection) 
 				{
-					If($BackgroundColor -ne $null) { $Cell.Shading.BackgroundPatternColor = $BackgroundColor; }
-					If($Bold) { $Cell.Range.Font.Bold = $true; }
-					If($Italic) { $Cell.Range.Font.Italic = $true; }
+					If($Null -ne $BackgroundColor) { $Cell.Shading.BackgroundPatternColor = $BackgroundColor; }
+					If($Bold) { $Cell.Range.Font.Bold = $True; }
+					If($Italic) { $Cell.Range.Font.Italic = $True; }
 					If($Underline) { $Cell.Range.Font.Underline = 1; }
-					If($Font -ne $null) { $Cell.Range.Font.Name = $Font; }
-					If($Color -ne $null) { $Cell.Range.Font.Color = $Color; }
+					If($Null -ne $Font) { $Cell.Range.Font.Name = $Font; }
+					If($Null -ne $Color) { $Cell.Range.Font.Color = $Color; }
 					If($Size -ne 0) { $Cell.Range.Font.Size = $Size; }
 					If($Solid) { $Cell.Shading.Texture = 0; } ## wdTextureNone
-				} # end foreach
+				} # end ForEach
 			} # end Collection
 			'Cell' 
 			{
-				If($Bold) { $Cell.Range.Font.Bold = $true; }
-				If($Italic) { $Cell.Range.Font.Italic = $true; }
+				If($Bold) { $Cell.Range.Font.Bold = $True; }
+				If($Italic) { $Cell.Range.Font.Italic = $True; }
 				If($Underline) { $Cell.Range.Font.Underline = 1; }
-				If($Font -ne $null) { $Cell.Range.Font.Name = $Font; }
-				If($Color -ne $null) { $Cell.Range.Font.Color = $Color; }
+				If($Null -ne $Font) { $Cell.Range.Font.Name = $Font; }
+				If($Null -ne $Color) { $Cell.Range.Font.Color = $Color; }
 				If($Size -ne 0) { $Cell.Range.Font.Size = $Size; }
-				If($BackgroundColor -ne $null) { $Cell.Shading.BackgroundPatternColor = $BackgroundColor; }
+				If($Null -ne $BackgroundColor) { $Cell.Shading.BackgroundPatternColor = $BackgroundColor; }
 				If($Solid) { $Cell.Shading.Texture = 0; } ## wdTextureNone
 			} # end Cell
 			'Hashtable' 
@@ -2764,17 +2857,17 @@ Function SetWordCellFormat
 				ForEach($Coordinate in $Coordinates) 
 				{
 					$Cell = $Table.Cell($Coordinate.Row, $Coordinate.Column);
-					If($Bold) { $Cell.Range.Font.Bold = $true; }
-					If($Italic) { $Cell.Range.Font.Italic = $true; }
+					If($Bold) { $Cell.Range.Font.Bold = $True; }
+					If($Italic) { $Cell.Range.Font.Italic = $True; }
 					If($Underline) { $Cell.Range.Font.Underline = 1; }
-					If($Font -ne $null) { $Cell.Range.Font.Name = $Font; }
-					If($Color -ne $null) { $Cell.Range.Font.Color = $Color; }
+					If($Null -ne $Font) { $Cell.Range.Font.Name = $Font; }
+					If($Null -ne $Color) { $Cell.Range.Font.Color = $Color; }
 					If($Size -ne 0) { $Cell.Range.Font.Size = $Size; }
-					If($BackgroundColor -ne $null) { $Cell.Shading.BackgroundPatternColor = $BackgroundColor; }
+					If($Null -ne $BackgroundColor) { $Cell.Shading.BackgroundPatternColor = $BackgroundColor; }
 					If($Solid) { $Cell.Shading.Texture = 0; } ## wdTextureNone
 				}
 			} # end Hashtable
-		} # end switch
+		} # end Switch
 	} # end process
 }
 
@@ -3366,6 +3459,48 @@ Function UpdateDocumentProperties
 	}
 }
 
+Function OutputReportFooter
+{
+	<#
+	Report Footer
+		Report information:
+			Created with: <Script Name> - Release Date: <Script Release Date>
+			Script version: <Script Version>
+			Started on <Date Time in Local Format>
+			Elapsed time: nn days, nn hours, nn minutes, nn.nn seconds
+			Ran from domain <Domain Name> by user <Username>
+			Ran from the folder <Folder Name>
+
+	Script Name and Script Release date are script-specific variables.
+	Script version is a script variable.
+	Start Date Time in Local Format is a script variable.
+	Domain Name is $env:USERDNSDOMAIN.
+	Username is $env:USERNAME.
+	Folder Name is a script variable.
+	#>
+
+	$runtime = $(Get-Date) - $Script:StartTime
+	$Str = [string]::format("{0} days, {1} hours, {2} minutes, {3}.{4} seconds",
+		$runtime.Days,
+		$runtime.Hours,
+		$runtime.Minutes,
+		$runtime.Seconds,
+		$runtime.Milliseconds)
+
+	If($MSWORD -or $PDF)
+	{
+		$Script:selection.InsertNewPage()
+		WriteWordLine 1 0 "Report Footer"
+		WriteWordLine 2 0 "Report Information:"
+		WriteWordLine 0 1 "Created with: $Script:ScriptName - Release Date: $Script:ReleaseDate"
+		WriteWordLine 0 1 "Script version: $Script:MyVersion"
+		WriteWordLine 0 1 "Started on $Script:StartTime"
+		WriteWordLine 0 1 "Elapsed time: $Str"
+		WriteWordLine 0 1 "Ran from domain $env:USERDNSDOMAIN by user $env:USERNAME"
+		WriteWordLine 0 1 "Ran from the folder $Script:pwdpath"
+	}
+}
+
 Function SaveandCloseDocumentandShutdownWord
 {
 	#bug fix 1-Apr-2014
@@ -3441,15 +3576,29 @@ Function SaveandCloseDocumentandShutdownWord
 		Write-Verbose "$(Get-Date -Format G): Deleting $($Script:FileName1) since only $($Script:FileName2) is needed"
 		Remove-Item $Script:FileName1
 	}
+
 	Write-Verbose "$(Get-Date -Format G): System Cleanup"
 	[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Script:Word) | Out-Null
 	If(Test-Path variable:global:word)
 	{
-		Remove-Variable -Name word -Scope Global
+		Remove-Variable -Name word -Scope Global 4>$Null
 	}
 	$SaveFormat = $Null
 	[gc]::collect() 
 	[gc]::WaitForPendingFinalizers()
+	
+	#is the winword Process still running? kill it
+
+	#find out our session (usually "1" except on TS/RDC or Citrix)
+	$SessionID = (Get-Process -PID $PID).SessionId
+
+	#Find out if winword running in our session
+	$wordprocess = ((Get-Process 'WinWord' -ea 0) | Where-Object {$_.SessionId -eq $SessionID}) | Select-Object -Property Id 
+	If( $wordprocess -and $wordprocess.Id -gt 0)
+	{
+		Write-Verbose "$(Get-Date -Format G): WinWord Process is still running. Attempting to stop WinWord Process # $($wordprocess.Id)"
+		Stop-Process $wordprocess.Id -EA 0
+	}
 }
 
 Function SetFileName1andFileName2
@@ -3814,7 +3963,7 @@ Write-Verbose "$(Get-Date -Format G): Build PVS farm values"
 [string]$ErrorTxt = "PVS Farm information"
 $farm = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 
-If($Farm -eq $Null)
+If($Null -eq $Farm)
 {
 	#without farm info, script should not proceed
 	$ErrorActionPreference = $SaveEAPreference
@@ -3859,7 +4008,7 @@ $GetParam = "farm = 1"
 $ErrorTxt = "Groups with Farm Administrator access"
 $authgroups = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 
-If($AuthGroups -ne $Null)
+If($Null -ne $AuthGroups)
 {
 	ForEach($Group in $authgroups)
 	{
@@ -3879,7 +4028,7 @@ $GetParam = ""
 $ErrorTxt = "Security Groups information"
 $authgroups = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 
-If($AuthGroups -ne $Null)
+If($Null -ne $AuthGroups)
 {
 	ForEach($Group in $authgroups)
 	{
@@ -4035,7 +4184,7 @@ ForEach($PVSSite in $PVSSites)
 	$ErrorTxt = "Groups with Site Administrator access"
 	$authgroups = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 	WriteWordLine 2 0 "Security"
-	If($authGroups -ne $Null)
+	If($Null -ne $authGroups)
 	{
 		WriteWordLine 0 1 "Groups with Site Administrator access:"
 		ForEach($Group in $authgroups)
@@ -4154,7 +4303,7 @@ ForEach($PVSSite in $PVSSites)
 		$stores = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 		WriteWordLine 0 2 "Stores that this server supports:"
 
-		If($Stores -ne $Null)
+		If($Null -ne $Stores)
 		{
 			ForEach($store in $stores)
 			{
@@ -4403,7 +4552,7 @@ ForEach($PVSSite in $PVSSites)
 			#We have the mandatory parameter to get the bootstrap info
 			#there should be at least one bootstrap filename
 			WriteWordLine 3 0 $Server.serverName
-			If($Bootstrapnames -ne $Null)
+			If($null -ne $Bootstrapnames)
 			{
 				#cannot use the BuildPVSObject Function here
 				$serverbootstraps = @()
@@ -4419,7 +4568,7 @@ ForEach($PVSSite in $PVSSites)
 						{
 							If($record.length -gt 5 -and $record.substring(0,6) -eq "Record")
 							{
-								If($serverbootstrap -ne $Null)
+								If($Null -ne $serverbootstrap)
 								{
 									$serverbootstraps +=  $serverbootstrap
 								}
@@ -4448,7 +4597,7 @@ ForEach($PVSSite in $PVSSites)
 						WriteWordLine 0 0 "Error returned is " $error[0].FullyQualifiedErrorId.Split(',')[0].Trim()
 					}
 				}
-				If($ServerBootstraps -ne $Null)
+				If($Null -ne $ServerBootstraps)
 				{
 					Write-Verbose "$(Get-Date -Format G): `t`t`t`t`tProcessing Bootstrap file $($ServerBootstrap.Bootstrapname)"
 					Write-Verbose "$(Get-Date -Format G): `t`t`t`t`t`tProcessing General Tab"
@@ -4566,7 +4715,7 @@ ForEach($PVSSite in $PVSSites)
 	$Disks = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 
 	WriteWordLine 2 0 "vDisk Pool"
-	If($Disks -ne $Null)
+	If($Null -ne $Disks)
 	{
 		ForEach($Disk in $Disks)
 		{
@@ -4981,7 +5130,7 @@ ForEach($PVSSite in $PVSSites)
 					{
 						If($record.length -gt 5 -and $record.substring(0,6) -eq "Record")
 						{
-							If($SingleObject -ne $Null)
+							If($Null -ne $SingleObject)
 							{
 								$PluralObject += $SingleObject
 							}
@@ -5002,7 +5151,7 @@ ForEach($PVSSite in $PVSSites)
 					$PluralObject += $SingleObject
 					$DiskVersions = $PluralObject
 					
-					If($DiskVersions -ne $Null)
+					If($Null -ne $DiskVersions)
 					{
 						WriteWordLine 0 1 "vDisk Versions"
 						#get the current booting version
@@ -5196,7 +5345,7 @@ ForEach($PVSSite in $PVSSites)
 		$ErrorTxt = "vDisk Update Management information"
 		$Tasks = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 		WriteWordLine 2 0 " vDisk Update Management"
-		If($Tasks -ne $Null)
+		If($Null -ne $Tasks)
 		{
 			If($PVSVersion -eq "6")
 			{
@@ -5208,7 +5357,7 @@ ForEach($PVSSite in $PVSSites)
 				$GetParam = "siteName = $Temp"
 				$ErrorTxt = "Virtual Hosting Pool information"
 				$vHosts = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-				If($vHosts -ne $Null)
+				If($Null -ne $vHosts)
 				{
 					WriteWordLine 3 0 "Hosts"
 					ForEach($vHost in $vHosts)
@@ -5249,7 +5398,7 @@ ForEach($PVSSite in $PVSSites)
 			$GetWhat = "diskUpdateDevice"
 			$ErrorTxt = "Update Managed vDisk information"
 			$ManagedvDisks = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-			If($ManagedvDisks -ne $Null)
+			If($Null -ne $ManagedvDisks)
 			{
 				WriteWordLine 3 0 "vDisks"
 				ForEach($ManagedvDisk in $ManagedvDisks)
@@ -5272,7 +5421,7 @@ ForEach($PVSSite in $PVSSites)
 					$GetParam = "deviceName = $Temp"
 					$ErrorTxt = "Device Personality Strings information"
 					$PersonalityStrings = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-					If($PersonalityStrings -ne $Null)
+					If($Null -ne $PersonalityStrings)
 					{
 						WriteWordLine 0 2 "Personality"
 						ForEach($PersonalityString in $PersonalityStrings)
@@ -5308,7 +5457,7 @@ ForEach($PVSSite in $PVSSites)
 				}
 			}
 			
-			If($Tasks -ne $Null)
+			If($Null -ne $Tasks)
 			{
 				Write-Verbose "$(Get-Date -Format G): `t`t`tProcessing all Update Managed Tasks for this site"
 				ForEach($Task in $Tasks)
@@ -5436,7 +5585,7 @@ ForEach($PVSSite in $PVSSites)
 					$GetParam = "deviceId = $Temp"
 					$ErrorTxt = "Device Info information"
 					$vDisks = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-					If($vDisks -ne $Null)
+					If($Null -ne $vDisks)
 					{
 						ForEach($vDisk in $vDisks)
 						{
@@ -5505,7 +5654,7 @@ ForEach($PVSSite in $PVSSites)
 	$ErrorTxt = "Device Collection information"
 	$Collections = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 
-	If($Collections -ne $Null)
+	If($Null -ne $Collections)
 	{
 		WriteWordLine 2 0 "Device Collections"
 		ForEach($Collection in $Collections)
@@ -5533,7 +5682,7 @@ ForEach($PVSSite in $PVSSites)
 			$AuthGroups = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 
 			$DeviceAdmins = $False
-			If($AuthGroups -ne $Null)
+			If($Null -ne $AuthGroups)
 			{
 				WriteWordLine 0 3 "Groups with 'Device Administrator' access:"
 				ForEach($AuthGroup in $AuthGroups)
@@ -5543,7 +5692,7 @@ ForEach($PVSSite in $PVSSites)
 					$GetParam = "authgroupname = $Temp"
 					$ErrorTxt = "Device Collection Administrator usage information"
 					$AuthGroupUsages = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-					If($AuthGroupUsages -ne $Null)
+					If($Null -ne $AuthGroupUsages)
 					{
 						ForEach($AuthGroupUsage in $AuthGroupUsages)
 						{
@@ -5562,7 +5711,7 @@ ForEach($PVSSite in $PVSSites)
 			}
 
 			$DeviceOperators = $False
-			If($AuthGroups -ne $Null)
+			If($Null -ne $AuthGroups)
 			{
 				WriteWordLine 0 3 "Groups with 'Device Operator' access:"
 				ForEach($AuthGroup in $AuthGroups)
@@ -5572,7 +5721,7 @@ ForEach($PVSSite in $PVSSites)
 					$GetParam = "authgroupname = $Temp"
 					$ErrorTxt = "Device Collection Operator usage information"
 					$AuthGroupUsages = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-					If($AuthGroupUsages -ne $Null)
+					If($Null -ne $AuthGroupUsages)
 					{
 						ForEach($AuthGroupUsage in $AuthGroupUsages)
 						{
@@ -5631,7 +5780,7 @@ ForEach($PVSSite in $PVSSites)
 			$ErrorTxt = "Device Info information"
 			$Devices = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 			
-			If($Devices -ne $Null)
+			If($Null -ne $Devices)
 			{
 				ForEach($Device in $Devices)
 				{
@@ -5702,7 +5851,7 @@ ForEach($PVSSite in $PVSSites)
 					$GetParam = "deviceName = $Temp"
 					$ErrorTxt = "Device vDisk information"
 					$vDisks = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-					If($vDisks -ne $Null)
+					If($Null -ne $vDisks)
 					{
 						ForEach($vDisk in $vDisks)
 						{
@@ -5727,7 +5876,7 @@ ForEach($PVSSite in $PVSSites)
 					$GetParam = "deviceName = $Temp"
 					$ErrorTxt = "Device Bootstrap information"
 					$Bootstraps = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-					If($Bootstraps -ne $Null)
+					If($Null -ne $Bootstraps)
 					{
 						ForEach($Bootstrap in $Bootstraps)
 						{
@@ -5754,7 +5903,7 @@ ForEach($PVSSite in $PVSSites)
 					$GetParam = "deviceName = $Temp"
 					$ErrorTxt = "Device Personality Strings information"
 					$PersonalityStrings = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-					If($PersonalityStrings -ne $Null)
+					If($Null -ne $PersonalityStrings)
 					{
 						WriteWordLine 0 2 "Personality"
 						ForEach($PersonalityString in $PersonalityStrings)
@@ -5781,7 +5930,7 @@ ForEach($PVSSite in $PVSSites)
 		$ErrorTxt = "User Group information"
 		$UserGroups = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 		WriteWordLine 2 0 "User Group Properties"
-		If($UserGroups -ne $Null)
+		If($Null -ne $UserGroups)
 		{
 			ForEach($UserGroup in $UserGroups)
 			{
@@ -5817,7 +5966,7 @@ ForEach($PVSSite in $PVSSites)
 				Write-Verbose "$(Get-Date -Format G): `t`t`t`t`tProcessing vDisk Tab"
 				WriteWordLine 0 1 "vDisk"
 				WriteWordLine 0 2 "vDisks for this user group:"
-				If($vDisks -ne $Null)
+				If($Null -ne $vDisks)
 				{
 					ForEach($vDisk in $vDisks)
 					{
@@ -5837,7 +5986,7 @@ ForEach($PVSSite in $PVSSites)
 	$SiteViews = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 	
 	WriteWordLine 2 0 "Site Views"
-	If($SiteViews -ne $Null)
+	If($Null -ne $SiteViews)
 	{
 		ForEach($SiteView in $SiteViews)
 		{
@@ -5864,7 +6013,7 @@ ForEach($PVSSite in $PVSSites)
 			$GetParam = "siteViewId = $Temp"
 			$ErrorTxt = "Site View Device Members information"
 			$Members = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-			If($Members -ne $Null)
+			If($Null -ne $Members)
 			{
 				ForEach($Member in $Members)
 				{
@@ -5886,7 +6035,7 @@ ForEach($PVSSite in $PVSSites)
 		$GetParam = "siteName = $Temp"
 		$ErrorTxt = "Virtual Hosting Pool information"
 		$vHosts = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-		If($vHosts -ne $Null)
+		If($Null -ne $vHosts)
 		{
 			WriteWordLine 2 0 "Hosts"
 			ForEach($vHost in $vHosts)
@@ -5936,7 +6085,7 @@ ForEach($PVSSite in $PVSSites)
 		{
 			If($record.length -gt 5 -and $record.substring(0,6) -eq "Record")
 			{
-				If($SingleObject -ne $Null)
+				If($Null -ne $SingleObject)
 				{
 					$PluralObject += $SingleObject
 				}
@@ -5957,7 +6106,7 @@ ForEach($PVSSite in $PVSSites)
 		$PluralObject += $SingleObject
 		$Audits = $PluralObject
 		
-		If($Audits -ne $Null)
+		If($Null -ne $Audits)
 		{
 			If($Audits -is [array])
 			{
@@ -6228,7 +6377,7 @@ $GetWhat = "FarmView"
 $GetParam = ""
 $ErrorTxt = "Farm View information"
 $FarmViews = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-If($FarmViews -ne $Null)
+If($Null -ne $FarmViews)
 {
 	ForEach($FarmView in $FarmViews)
 	{
@@ -6255,7 +6404,7 @@ If($FarmViews -ne $Null)
 		$GetParam = "farmViewId = $Temp"
 		$ErrorTxt = "Farm View Device Members information"
 		$Members = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-		If($Members -ne $Null)
+		If($Null -ne $Members)
 		{
 			ForEach($Member in $Members)
 			{
@@ -6280,7 +6429,7 @@ $GetWhat = "Store"
 $GetParam = ""
 $ErrorTxt = "Farm Store information"
 $Stores = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-If($Stores -ne $Null)
+If($Null -ne $Stores)
 {
 	ForEach($Store in $Stores)
 	{
@@ -6313,7 +6462,7 @@ If($Stores -ne $Null)
 		$Servers = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 		$StoreSite = ""
 		$StoreServers = @()
-		If($Servers -ne $Null)
+		If($Null -ne $Servers)
 		{
 			ForEach($Server in $Servers)
 			{
@@ -6323,7 +6472,7 @@ If($Stores -ne $Null)
 				$GetParam = "serverName = $Temp"
 				$ErrorTxt = "Server Store information"
 				$ServerStore = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-				If($ServerStore -ne $Null -and $ServerStore.storeName -eq $Store.StoreName)
+				If($Null -ne $ServerStore -and $ServerStore.storeName -eq $Store.StoreName)
 				{
 					$StoreSite = $Server.siteName
 					$StoreServers +=  $Server.serverName
@@ -6482,6 +6631,11 @@ Write-Verbose "$(Get-Date -Format G): Finishing up document"
 $AbstractTitle = "Citrix Provisioning Services Inventory"
 $SubjectTitle = "Citrix Provisioning Services Inventory"
 UpdateDocumentProperties $AbstractTitle $SubjectTitle
+
+If($ReportFooter)
+{
+	OutputReportFooter
+}
 
 If($MSWORD -or $PDF)
 {
