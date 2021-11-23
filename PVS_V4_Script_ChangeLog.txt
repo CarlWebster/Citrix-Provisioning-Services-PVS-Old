@@ -5,6 +5,26 @@
 #This script written for "Benji", March 19, 2012
 #Thanks to Michael B. Smith, Joe Shonk and Stephane Thirion for testing and fine-tuning tips 
 
+#Version 4.31 23-Nov-2021
+#	Added Function OutputReportFooter
+#	Added Parameter ReportFooter
+#		Outputs a footer section at the end of the report.
+#		Report Footer
+#			Report information:
+#				Created with: <Script Name> - Release Date: <Script Release Date>
+#				Script version: <Script Version>
+#				Started on <Date Time in Local Format>
+#				Elapsed time: nn days, nn hours, nn minutes, nn.nn seconds
+#				Ran from domain <Domain Name> by user <Username>
+#				Ran from the folder <Folder Name>
+#	Cleaned up numerous incorrect $Null comparisons
+#	In Function AbortScript, add test for the winword process and terminate it if it is running
+#	In Functions AbortScript and SaveandCloseDocumentandShutdownWord, add code from Guy Leech to test for the "Id" property before using it
+#	Updated Functions ShowScriptOptions and ProcessScriptEnd to add $ReportFooter
+#	Updated Functions AddWordTable and SetWordCellFormat
+#	Updated the help text
+#	Updated the ReadMe file
+
 #Version 4.30 19-Jan-2021
 #	Added to the Computer Hardware section, the server's Power Plan (requested by JLuhring)
 #	Changed all Verbose statements from Get-Date to Get-Date -Format G as requested by Guy Leech
