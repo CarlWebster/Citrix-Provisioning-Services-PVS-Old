@@ -3,13 +3,19 @@
 
 <#
 .SYNOPSIS
-	Creates a complete inventory of a Citrix PVS 5.x, 6.x or 7.x farm using Microsoft Word 
-	2010, 2013, or 2016.
+	Creates a complete inventory of a Citrix PVS 5.x, 6.x or later farm using Microsoft 
+	Word 2010, 2013, or 2016.
 .DESCRIPTION
-	Creates a complete inventory of a Citrix PVS 5.x, 6.x, or 7.x farm using Microsoft Word 
-	and PowerShell.
-	Creates a Word document named after the PVS 5.x, 6.x, or 7.x farm.
+	Creates a complete inventory of a Citrix PVS 5.x, 6.x, or later farm using Microsoft 
+	Word and PowerShell.
+	
+	Creates a Word document named after the PVS 5.x, 6.x, or later farm.
+	
+	This script works with any PVS version where Citrix includes support for the old 
+	string-based PowerShell.
+	
 	Document includes a Cover Page, Table of Contents, and Footer.
+
 	Version 4 and later include support for the following language versions of Microsoft 
 	Word:
 		Catalan
@@ -348,9 +354,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: PVS_Inventory_V43.ps1
-	VERSION: 4.31
+	VERSION: 4.32
 	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith, Jeff Wouters, and Iain Brighton)
-	LASTEDIT: November 23, 2021
+	LASTEDIT: February 10, 2022
 #>
 
 
@@ -439,6 +445,19 @@ Param(
 #This script written for "Benji", March 19, 2012
 #Thanks to Michael B. Smith, Joe Shonk and Stephane Thirion for testing and fine-tuning tips 
 
+#Version 4.32 10-Feb-2022
+#	Fixed the German Table of Contents (Thanks to Rene Bigler)
+#		From 
+#			'de-'	{ 'Automatische Tabelle 2'; Break }
+#		To
+#			'de-'	{ 'Automatisches Verzeichnis 2'; Break }
+#	In Function AbortScript, add test for the winword process and terminate it if it is running
+#		Added stopping the transcript log if the log was enabled and started
+#	In Functions AbortScript and SaveandCloseDocumentandShutdownWord, add code from Guy Leech to test for the "Id" property before using it
+#	Replaced most script Exit calls with AbortScript to stop the transcript log if the log was enabled and started
+#	Updated the help text
+#	Updated the ReadMe file
+#
 #Version 4.31 23-Nov-2021
 #	Added Function OutputReportFooter
 #	Added Parameter ReportFooter
@@ -547,6 +566,43 @@ Param(
 #	Add parameters for MSWord, Text and HTML for future updates
 #
 
+
+Function AbortScript
+{
+	If($MSWord -or $PDF)
+	{
+		Write-Verbose "$(Get-Date -Format G): System Cleanup"
+		If(Test-Path variable:global:word)
+		{
+			$Script:Word.quit()
+			[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Script:Word) | Out-Null
+			Remove-Variable -Name word -Scope Global 4>$Null
+		}
+	}
+	[gc]::collect() 
+	[gc]::WaitForPendingFinalizers()
+
+	If($MSWord -or $PDF)
+	{
+		#is the winword Process still running? kill it
+
+		#find out our session (usually "1" except on TS/RDC or Citrix)
+		$SessionID = (Get-Process -PID $PID).SessionId
+
+		#Find out if winword running in our session
+		$wordprocess = ((Get-Process 'WinWord' -ea 0) | Where-Object {$_.SessionId -eq $SessionID}) | Select-Object -Property Id 
+		If( $wordprocess -and $wordprocess.Id -gt 0)
+		{
+			Write-Verbose "$(Get-Date -Format G): WinWord Process is still running. Attempting to stop WinWord Process # $($wordprocess.Id)"
+			Stop-Process $wordprocess.Id -EA 0
+		}
+	}
+	
+	Write-Verbose "$(Get-Date -Format G): Script has been aborted"
+	$ErrorActionPreference = $SaveEAPreference
+	Exit
+}
+
 Set-StrictMode -Version 2
 
 #force  on
@@ -555,9 +611,9 @@ $SaveEAPreference = $ErrorActionPreference
 $ErrorActionPreference = 'SilentlyContinue'
 
 #stuff for report footer
-$script:MyVersion           = '4.31'
+$script:MyVersion           = '4.32'
 $Script:ScriptName          = "PVS_Inventory_V43.ps1"
-$tmpdate                    = [datetime] "11/23/2021"
+$tmpdate                    = [datetime] "02/10/2022"
 $Script:ReleaseDate         = $tmpdate.ToUniversalTime().ToShortDateString()
 
 If($Null -eq $MSWord)
@@ -613,7 +669,7 @@ Else
 	Script cannot continue.
 	`n`n
 	"
-	Exit
+	AbortScript
 }
 
 If($Folder -ne "")
@@ -640,7 +696,7 @@ If($Folder -ne "")
 			Script cannot continue.
 			`n`n
 			"
-			Exit
+			AbortScript
 		}
 	}
 	Else
@@ -655,7 +711,7 @@ If($Folder -ne "")
 		Script cannot continue.
 		`n`n
 		"
-		Exit
+		AbortScript
 	}
 }
 
@@ -669,7 +725,7 @@ If(![String]::IsNullOrEmpty($SmtpServer) -and [String]::IsNullOrEmpty($From) -an
 	`t`t
 	Script cannot continue.
 	`n`n"
-	Exit
+	AbortScript
 }
 If(![String]::IsNullOrEmpty($SmtpServer) -and [String]::IsNullOrEmpty($From) -and ![String]::IsNullOrEmpty($To))
 {
@@ -681,7 +737,7 @@ If(![String]::IsNullOrEmpty($SmtpServer) -and [String]::IsNullOrEmpty($From) -an
 	`t`t
 	Script cannot continue.
 	`n`n"
-	Exit
+	AbortScript
 }
 If(![String]::IsNullOrEmpty($SmtpServer) -and [String]::IsNullOrEmpty($To) -and ![String]::IsNullOrEmpty($From))
 {
@@ -693,7 +749,7 @@ If(![String]::IsNullOrEmpty($SmtpServer) -and [String]::IsNullOrEmpty($To) -and 
 	`t`t
 	Script cannot continue.
 	`n`n"
-	Exit
+	AbortScript
 }
 If(![String]::IsNullOrEmpty($From) -and ![String]::IsNullOrEmpty($To) -and [String]::IsNullOrEmpty($SmtpServer))
 {
@@ -705,7 +761,7 @@ If(![String]::IsNullOrEmpty($From) -and ![String]::IsNullOrEmpty($To) -and [Stri
 	`t`t
 	Script cannot continue.
 	`n`n"
-	Exit
+	AbortScript
 }
 If(![String]::IsNullOrEmpty($From) -and [String]::IsNullOrEmpty($SmtpServer))
 {
@@ -717,7 +773,7 @@ If(![String]::IsNullOrEmpty($From) -and [String]::IsNullOrEmpty($SmtpServer))
 	`t`t
 	Script cannot continue.
 	`n`n"
-	Exit
+	AbortScript
 }
 If(![String]::IsNullOrEmpty($To) -and [String]::IsNullOrEmpty($SmtpServer))
 {
@@ -729,7 +785,7 @@ If(![String]::IsNullOrEmpty($To) -and [String]::IsNullOrEmpty($SmtpServer))
 	`t`t
 	Script cannot continue.
 	`n`n"
-	Exit
+	AbortScript
 }
 
 [string]$Script:RunningOS = (Get-WmiObject -class Win32_OperatingSystem -EA 0).Caption
@@ -1754,7 +1810,8 @@ Function SetWordHashTable
 		{
 			'ca-'	{ 'Taula automática 2'; Break }
 			'da-'	{ 'Automatisk tabel 2'; Break }
-			'de-'	{ 'Automatische Tabelle 2'; Break }
+			#'de-'	{ 'Automatische Tabelle 2'; Break }
+			'de-'	{ 'Automatisches Verzeichnis 2'; Break } #changed 10-feb-2022 rene bigler
 			'en-'	{ 'Automatic Table 2'; Break }
 			'es-'	{ 'Tabla automática 2'; Break }
 			'fi-'	{ 'Automaattinen taulukko 2'; Break }
@@ -2110,12 +2167,12 @@ Function CheckWordPrereq
 		If(($MSWord -eq $False) -and ($PDF -eq $True))
 		{
 			Write-Host "`n`n`t`tThis script uses Microsoft Word's SaveAs PDF function, please install Microsoft Word`n`n"
-			Exit
+			AbortScript
 		}
 		Else
 		{
 			Write-Host "`n`n`t`tThis script directly outputs to Microsoft Word, please install Microsoft Word`n`n"
-			Exit
+			AbortScript
 		}
 	}
 
@@ -2128,7 +2185,7 @@ Function CheckWordPrereq
 	{
 		$ErrorActionPreference = $SaveEAPreference
 		Write-Host "`n`n`tPlease close all instances of Microsoft Word before running this report.`n`n"
-		Exit
+		AbortScript
 	}
 }
 
@@ -2441,42 +2498,6 @@ Function _SetDocumentProperty
 
 	#set the value
 	$Prop.GetType().InvokeMember("Value","SetProperty",$Null,$prop,$Value)
-}
-
-Function AbortScript
-{
-	If($MSWord -or $PDF)
-	{
-		Write-Verbose "$(Get-Date -Format G): System Cleanup"
-		If(Test-Path variable:global:word)
-		{
-			$Script:Word.quit()
-			[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Script:Word) | Out-Null
-			Remove-Variable -Name word -Scope Global 4>$Null
-		}
-	}
-	[gc]::collect() 
-	[gc]::WaitForPendingFinalizers()
-
-	If($MSWord -or $PDF)
-	{
-		#is the winword Process still running? kill it
-
-		#find out our session (usually "1" except on TS/RDC or Citrix)
-		$SessionID = (Get-Process -PID $PID).SessionId
-
-		#Find out if winword running in our session
-		$wordprocess = ((Get-Process 'WinWord' -ea 0) | Where-Object {$_.SessionId -eq $SessionID}) | Select-Object -Property Id 
-		If( $wordprocess -and $wordprocess.Id -gt 0)
-		{
-			Write-Verbose "$(Get-Date -Format G): WinWord Process is still running. Attempting to stop WinWord Process # $($wordprocess.Id)"
-			Stop-Process $wordprocess.Id -EA 0
-		}
-	}
-	
-	Write-Verbose "$(Get-Date -Format G): Script has been aborted"
-	$ErrorActionPreference = $SaveEAPreference
-	Exit
 }
 
 Function FindWordDocumentEnd
@@ -3011,7 +3032,7 @@ Function SetupWord
 		Script cannot continue.
 		`n`n
 		"
-		Exit
+		AbortScript
 	}
 
 	Write-Verbose "$(Get-Date -Format G): Determine Word language value"
@@ -3082,7 +3103,7 @@ Function SetupWord
 		Script cannot continue.
 		`n`n
 		"
-		Exit
+		AbortScript
 	}
 	Else
 	{
@@ -3756,7 +3777,7 @@ If(!(Check-NeededPSSnapins "McliPSSnapIn"))
 		Script will now close.
 		`n`n
 		"
-		Exit
+		AbortScript
 	}
 	Else
 	{
@@ -3800,7 +3821,7 @@ If(![System.String]::IsNullOrEmpty($AdminAddress))
 		Write-Host "Warning: Using -AdminAddress requires the script be run from an elevated PowerShell session." -Foreground White
 		Write-Host "Warning: Please run the script from an elevated PowerShell session.  Script cannot continue" -Foreground White
 		Write-Host "Warning: " -Foreground White
-		Exit
+		AbortScript
 	}
 	Else
 	{
@@ -3845,7 +3866,7 @@ If(![System.String]::IsNullOrEmpty($AdminAddress))
 		Write-Warning "Remoting could not be setup to server $($AdminAddress)"
 		Write-Warning "Error returned is " $error[0].FullyQualifiedErrorId.Split(',')[0].Trim()
 		Write-Warning "Script cannot continue"
-		Exit
+		AbortScript
 	}
 }
 
@@ -3884,7 +3905,7 @@ If($soapserver.Status -ne "Running")
 	See message above.
 	`n`n
 	"
-	Exit
+	AbortScript
 }
 
 If($StreamService.Status -ne "Running")
@@ -3907,7 +3928,7 @@ If($StreamService.Status -ne "Running")
 	See message above.
 	`n`n
 	"
-	Exit
+	AbortScript
 }
 
 #get PVS major version
@@ -3946,7 +3967,7 @@ Else
 	`n`n
 	"
 	#without version info, script should not proceed
-	Exit
+	AbortScript
 }
 
 $PVSVersion     = $Version.mapiVersion.SubString(0,1)
@@ -3976,7 +3997,7 @@ If($Null -eq $Farm)
 	Script is terminating.
 	`n`n
 	"
-	Exit
+	AbortScript
 }
 
 [string]$FarmName = $farm.FarmName
