@@ -354,9 +354,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: PVS_Inventory_V43.ps1
-	VERSION: 4.32
+	VERSION: 4.33
 	AUTHOR: Carl Webster (with a lot of help from Michael B. Smith, Jeff Wouters, and Iain Brighton)
-	LASTEDIT: February 10, 2022
+	LASTEDIT: March 6, 2022
 #>
 
 
@@ -445,6 +445,15 @@ Param(
 #This script written for "Benji", March 19, 2012
 #Thanks to Michael B. Smith, Joe Shonk and Stephane Thirion for testing and fine-tuning tips 
 
+#Version 4.33 6-Mar-2022
+#	Added MultiSubnetFailover to Farm Status section
+#		Thanks to Arnaud Pain
+#		I can't believe no one has asked for this since PVS 7.11 was released on 14-Sep-2016
+#	Fixed bug when retrieving a Device Collection's Administrators and Operators
+#		I was not comparing to the specific device collection name, which returned all administrators and 
+#		operators for all device collections and not the device collection being processed 
+#	Format the Farm, Properties, Status section to match the console output
+#
 #Version 4.32 10-Feb-2022
 #	Fixed the German Table of Contents (Thanks to Rene Bigler)
 #		From 
@@ -611,9 +620,9 @@ $SaveEAPreference = $ErrorActionPreference
 $ErrorActionPreference = 'SilentlyContinue'
 
 #stuff for report footer
-$script:MyVersion           = '4.32'
+$script:MyVersion           = '4.33'
 $Script:ScriptName          = "PVS_Inventory_V43.ps1"
-$tmpdate                    = [datetime] "02/10/2022"
+$tmpdate                    = [datetime] "03/06/2022"
 $Script:ReleaseDate         = $tmpdate.ToUniversalTime().ToShortDateString()
 
 If($Null -eq $MSWord)
@@ -4141,23 +4150,32 @@ If($PVSVersion -eq "6" -or $PVSVersion -eq "7")
 }
 
 #status tab
+	
+If($PVSFullVersion -ge "7.11")
+{
+	If($farm.multiSubnetFailover -eq "1")
+	{
+		$MultiSubnetFailover = "True"
+	}
+	Else
+	{
+		$MultiSubnetFailover = "False"
+	}
+}
+Else
+{
+	$MultiSubnetFailover = "No supported on PVS $($Script:PVSFullVersion)"
+}
+
 Write-Verbose "$(Get-Date -Format G): `tProcessing Status Tab"
 WriteWordLine 2 0 "Status"
 WriteWordLine 0 1 "Current status of the farm:"
 WriteWordLine 0 2 "Database server`t: " $farm.databaseServerName
-If(![String]::IsNullOrEmpty($farm.databaseInstanceName))
-{
-	WriteWordLine 0 2 "Database instance`t: " $farm.databaseInstanceName
-}
+WriteWordLine 0 2 "Database instance`t: " $farm.databaseInstanceName
 WriteWordLine 0 2 "Database`t`t: " $farm.databaseName
-If(![String]::IsNullOrEmpty($farm.failoverPartnerServerName))
-{
-	WriteWordLine 0 2 "Failover Partner Server: " $farm.failoverPartnerServerName
-}
-If(![String]::IsNullOrEmpty($farm.failoverPartnerInstanceName))
-{
-	WriteWordLine 0 2 "Failover Partner Instance: " $farm.failoverPartnerInstanceName
-}
+WriteWordLine 0 2 "Failover Partner Server: " $farm.failoverPartnerServerName
+WriteWordLine 0 2 "Failover Partner Instance: " $farm.failoverPartnerInstanceName
+WriteWordLine 0 2 "MultiSubnetFailover: " $MultiSubnetFailover
 If($Farm.adGroupsEnabled -eq "1")
 {
 	WriteWordLine 0 2 "Active Directory groups are used for access rights"
@@ -5717,7 +5735,7 @@ ForEach($PVSSite in $PVSSites)
 					{
 						ForEach($AuthGroupUsage in $AuthGroupUsages)
 						{
-							If($AuthGroupUsage.role -eq "300")
+							If($AuthGroupUsage.role -eq "300" -and $AuthGroupUsage.Name -eq $Collection.collectionName)
 							{
 								$DeviceAdmins = $True
 								WriteWordLine 0 3 $authgroup.authGroupName
@@ -5746,7 +5764,7 @@ ForEach($PVSSite in $PVSSites)
 					{
 						ForEach($AuthGroupUsage in $AuthGroupUsages)
 						{
-							If($AuthGroupUsage.role -eq "400")
+							If($AuthGroupUsage.role -eq "400" -and $AuthGroupUsage.Name -eq $Collection.collectionName)
 							{
 								$DeviceOperators = $True
 								WriteWordLine 0 3 $authgroup.authGroupName
