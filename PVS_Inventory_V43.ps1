@@ -4153,18 +4153,11 @@ If($PVSVersion -eq "6" -or $PVSVersion -eq "7")
 	
 If($PVSFullVersion -ge "7.11")
 {
-	If($farm.multiSubnetFailover -eq "1")
-	{
-		$MultiSubnetFailover = "True"
-	}
-	Else
-	{
-		$MultiSubnetFailover = "False"
-	}
+	$MultiSubnetFailover = $farm.MultiSubnetFailover
 }
 Else
 {
-	$MultiSubnetFailover = "No supported on PVS $($Script:PVSFullVersion)"
+	$MultiSubnetFailover = "Not supported on PVS $($PVSFullVersion)"
 }
 
 Write-Verbose "$(Get-Date -Format G): `tProcessing Status Tab"
